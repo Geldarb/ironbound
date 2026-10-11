@@ -4,8 +4,22 @@ import { Scene } from './scene.js';
 import { UI } from './ui.js';
 import { drawHero } from './art.js';
 import { $ } from './dom.js';
+import { simulateOffline } from './offline.js';
+import { OFFLINE } from './data.js';
 
 let game = null, scene = null, ui = null, raf = 0, saveT = 0;
+
+/** run offline progress if the hero was away long enough; returns the report (or null) */
+function catchUp() {
+  const d = game.data, now = Date.now(), away = d.lastSeen ? (now - d.lastSeen) / 1000 : 0;
+  let rep = null;
+  if (d.activity && away >= OFFLINE.minAway) rep = simulateOffline(game, away);
+  game.resumeActivity();
+  game.snapshot(now);
+  if (rep?.activity) { writeSave(game.data); ui?.showWelcome(rep); }
+  return rep;
+}
+const persist = () => { if (game && !window.__ibFreeze) { game.snapshot(); writeSave(game.data); } };
 
 function start(data) {
   game = new Game(data);
@@ -16,18 +30,19 @@ function start(data) {
     new ResizeObserver(() => scene.resize()).observe(cv);
   } else { scene.g = game; scene.look = data.look; scene.floaters = []; }
   ui = new UI(game, resetCharacter); ui.onSheet = (o) => { scene.sheetOpen = o; };
-  game.on((t, p) => { scene.onEvent(t, p); if (t === 'level' || t === 'die' || t === 'area') writeSave(game.data); });
-  window.__ib = { game, scene, ui };
+  game.on((t, p) => { scene.onEvent(t, p); if (t === 'level' || t === 'die' || t === 'area') persist(); });
+  window.__ib = { game, scene, ui, catchUp };
   $('create').hidden = true;
   scene.resize();
   ui.updateTarget();
+  catchUp();
   let last = performance.now();
   cancelAnimationFrame(raf);
   const loop = (now) => {
     const dt = Math.min(0.25, (now - last) / 1000); last = now;
     game.update(dt); scene.draw(now); ui.tick(dt);
     saveT += dt; game.data.stats.played += dt;
-    if (saveT > 5) { saveT = 0; writeSave(game.data); }
+    if (saveT > 3) { saveT = 0; persist(); }
     raf = requestAnimationFrame(loop);
   };
   raf = requestAnimationFrame(loop);
@@ -54,5 +69,5 @@ function showCreate() {
 
 const saved = loadSave();
 if (saved) start(saved); else showCreate();
-window.addEventListener('pagehide', () => { if (game) writeSave(game.data); });
-document.addEventListener('visibilitychange', () => { if (document.hidden && game) writeSave(game.data); });
+window.addEventListener('pagehide', persist);
+document.addEventListener('visibilitychange', () => { if (document.hidden) persist(); else if (game && !window.__ibFreeze) catchUp(); });

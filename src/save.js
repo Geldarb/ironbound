@@ -1,6 +1,6 @@
 // Single-slot localStorage save (versioned; the shape leaves room for more skills / slots later).
 import { SKILL_IDS, SLOT_IDS, START_AREA } from './data.js';
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 export const SAVE_KEY = 'ironbound-save-v1';
 export const LOOKS = [
   { skin: '#f2c9a0', hair: '#5a3a1e', shirt: '#3b8eea' },
@@ -14,8 +14,9 @@ export function newData(name, look = 0) {
   return {
     v: SAVE_VERSION, name: String(name || 'Hero').slice(0, 14), look: look % LOOKS.length, xp, hp: 10,
     stance: 'accurate', coins: 0, area: START_AREA,
-    bag: [{ id: 'bronze_pickaxe', n: 1 }, { id: 'bronze_axe', n: 1 }, { id: 'hammer', n: 1 }],
+    bag: [{ id: 'bronze_pickaxe', n: 1 }, { id: 'bronze_axe', n: 1 }, { id: 'hammer', n: 1 }, { id: 'small_net', n: 1 }],
     bank: {}, equip: Object.fromEntries(SLOT_IDS.map((s) => [s, null])), visited: {}, stats: { kills: 0, played: 0 },
+    autoEat: { on: true, pct: 50 }, lastSeen: 0, activity: null,
   };
 }
 /** Fills any missing field so older/partial saves load (add migrations here when SAVE_VERSION grows). */
@@ -26,6 +27,11 @@ export function migrate(d) {
   out.bag = Array.isArray(d.bag) ? d.bag.filter((s) => s && s.id && s.n > 0) : base.bag;
   out.bank = d.bank && typeof d.bank === 'object' ? d.bank : {};
   out.visited = d.visited && typeof d.visited === 'object' ? d.visited : {};
+  out.autoEat = { ...base.autoEat, ...(d.autoEat || {}) };
+  out.activity = d.activity && typeof d.activity === 'object' ? d.activity : null;
+  out.lastSeen = Number(d.lastSeen) || 0;
+  // v1 -> v2: fishing/cooking skills start at 0 (filled above); everyone gets the starter net. Levels are untouched (the XP table is unchanged; only gain rates changed).
+  if ((d.v || 1) < 2 && !out.bag.some((x) => x.id === 'small_net') && out.bag.length < 28) out.bag.push({ id: 'small_net', n: 1 });
   out.v = SAVE_VERSION;
   return out;
 }

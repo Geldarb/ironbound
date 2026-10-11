@@ -1,11 +1,14 @@
 // Game model: character state + the traversable-area simulation. No DOM here (the UI listens to `game.on`).
-import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable } from './data.js';
+import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood } from './data.js';
 import { levelForXp } from './xp.js';
 import { heroCombat, heroHitChance, monsterHitChance, combatLevel } from './combat.js';
 
+export const TOOL_NAMES = { pickaxe: 'pickaxe', axe: 'axe', net: 'small fishing net', rod: 'fishing rod', harpoon: 'harpoon', cage: 'lobster pot', hammer: 'hammer' };
 export const WALK_SPEED = 150;
 export const REACH = { monster: 46, node: 40, station: 56, sign: 50 };
 const REGEN_EVERY = 2;
+export const EAT_DELAY = 1.2; // seconds between bites
+export const RETREAT_FRAC = 0.4;
 
 export class Game {
   constructor(data, rng = Math.random) {
@@ -16,6 +19,7 @@ export class Game {
     this.target = null; // entity id
     this.ents = [];
     this.regenT = 0;
+    this.eatCd = 0;
     this.data.area = AREAS[this.data.area] ? this.data.area : 'meadow';
     this.enterArea(this.data.area, AREAS[this.data.area].spawn, true);
     this.data.hp = Math.min(this.data.hp || this.maxHp, this.maxHp);
@@ -31,6 +35,7 @@ export class Game {
   get combatLevel() { return combatLevel(this.levels); }
   gain(skill, amount) {
     if (amount <= 0) return;
+    amount *= XP_RATE;
     const before = this.level(skill);
     this.data.xp[skill] = Math.min(200000000, (this.data.xp[skill] || 0) + amount);
     this.emit('xp', { skill, amount, x: this.hero.x });
@@ -76,6 +81,31 @@ export class Game {
     let best = null;
     for (const s of this.data.bag) { const it = ITEMS[s.id]; if (it?.tool === type && (!best || it.toolTier > best.toolTier)) best = it; }
     return best;
+  }
+
+  // ---- food / eating
+  /** best food in the bag (highest healing) or null */
+  bestFood() { let best = null; for (const s of this.data.bag) { const it = ITEMS[s.id]; if (isFood(s.id) && (!best || it.heal > best.heal)) best = it; } return best; }
+  get foodCount() { return this.data.bag.reduce((a, s) => a + (isFood(s.id) ? s.n : 0), 0); }
+  /** eat one piece of food: heals a fixed amount, then a short delay before the next bite (and a slower next attack in combat) */
+  eat(id) {
+    const it = ITEMS[id];
+    if (!it?.heal || this.count(id) < 1) return false;
+    if (this.data.hp >= this.maxHp) { this.toast('Hitpoints already full'); return false; }
+    if (this.eatCd > 0) return false;
+    this.removeItem(id, 1);
+    const n = Math.min(it.heal, this.maxHp - this.data.hp);
+    this.data.hp += n; this.eatCd = EAT_DELAY;
+    if (this.targetEnt?.type === 'monster') this.hero.cd += 0.6;
+    this.emit('heal', { x: this.hero.x, n, id }); this.emit('change');
+    return true;
+  }
+  eatBest() { const f = this.bestFood(); return f ? this.eat(f.id) : false; }
+  setAutoEat(on, pct) { if (on != null) this.data.autoEat.on = !!on; if (pct) this.data.autoEat.pct = pct; this.emit('change'); }
+  tryAutoEat() {
+    const a = this.data.autoEat;
+    if (a.on && this.eatCd <= 0 && this.data.hp <= Math.ceil(this.maxHp * a.pct / 100) && this.data.hp < this.maxHp) return this.eatBest();
+    return false;
   }
 
   // ---- equipment
@@ -136,11 +166,11 @@ export class Game {
   }
 
   // ---- crafting (furnace / anvil). Stations must have been visited (tapped in the world) once.
-  stationVisited(st) { return !!this.data.visited[st]; }
+  stationVisited(st) { return st === 'cook' ? !!(this.data.visited.fire || this.data.visited.range) : !!this.data.visited[st]; }
   recipeStatus(r) {
-    if (!this.stationVisited(r.station)) return { ok: false, reason: `Visit the ${STATIONS[r.station].name} first` };
-    const skill = this.level('smithing');
-    if (skill < r.level) return { ok: false, reason: `Smithing ${r.level}` };
+    if (!this.stationVisited(r.station)) return { ok: false, reason: r.station === 'cook' ? 'Visit a campfire or range first' : `Visit the ${STATIONS[r.station].name} first` };
+    const sk = r.skill || 'smithing';
+    if (this.level(sk) < r.level) return { ok: false, reason: `${sk[0].toUpperCase() + sk.slice(1)} ${r.level}` };
     if (r.station === 'anvil' && !this.count('hammer')) return { ok: false, reason: 'Needs a hammer' };
     for (const [id, n] of Object.entries(r.inputs)) if (this.count(id) < n) return { ok: false, reason: `Need ${ITEMS[id].name} x${n}` };
     return { ok: true };
@@ -154,11 +184,12 @@ export class Game {
       if (!st.ok) { res.reason = st.reason; break; }
       if (!isStackable(r.out) && this.slotsUsed >= BAG_SLOTS && !Object.keys(r.inputs).some((k) => this.count(k) === r.inputs[k])) { res.reason = 'Bag is full'; break; }
       for (const [id, n] of Object.entries(r.inputs)) this.removeItem(id, n);
-      if (r.chance >= 1 || this.rng() < r.chance) {
+      const burn = r.stop ? burnChance(r, this.level(r.skill), !!this.data.visited.range) : 0;
+      if (r.stop ? this.rng() >= burn : (r.chance >= 1 || this.rng() < r.chance)) {
         if (!this.addItem(r.out, 1)) { res.reason = 'Bag is full'; break; }
-        this.gain('smithing', r.xp); res.done++;
+        this.gain(r.skill || 'smithing', r.xp); res.done++;
         this.emit('craft', { id: r.out });
-      } else { res.failed++; this.emit('craftfail', { id: r.out }); }
+      } else { res.failed++; if (r.burnt) this.addItem(r.burnt, 1); this.emit('craftfail', { id: r.out }); }
     }
     this.emit('change');
     return res;
@@ -199,7 +230,8 @@ export class Game {
     if (e.type === 'node') {
       const n = NODES[e.kind];
       if (this.level(n.skill) < n.level) { this.toast(`${n.name} need ${n.skill} level ${n.level}`); return false; }
-      if (!this.bestTool(n.tool)) { this.toast(`You need a ${n.tool}`); return false; }
+      if (!this.bestTool(n.tool)) { this.toast(`You need a ${TOOL_NAMES[n.tool] || n.tool}`); return false; }
+      if (n.bait && !this.count(n.bait)) { this.toast(`You need ${ITEMS[n.bait].name.toLowerCase()} as bait`); return false; }
     }
     this.target = id; this.hero.dest = null; this.hero.cd = 0.5; e.cd = 1.2;
     this.emit('target');
@@ -217,6 +249,7 @@ export class Game {
       }
     }
     if (h.cd > 0) h.cd -= dt;
+    if (this.eatCd > 0) this.eatCd -= dt;
     let engaged = false;
     const t = this.targetEnt;
     const moveTo = (x) => {
@@ -242,6 +275,7 @@ export class Game {
     } else if (h.dest != null) {
       if (moveTo(h.dest)) { h.dest = null; h.state = 'idle'; }
     } else if (h.state === 'walk') h.state = 'idle';
+    if (engaged) this.tryAutoEat();
     // regeneration when not in a fight
     if (!engaged && this.data.hp < this.maxHp) {
       this.regenT += dt;
@@ -267,18 +301,21 @@ export class Game {
       this.data.hp = Math.max(0, this.data.hp - dmg);
       this.emit('hit', { who: 'hero', x: h.x, dmg, miss: dmg === 0 });
       if (this.data.hp <= 0) { this.die(); return false; }
-      if (this.data.hp < this.maxHp * 0.4) { this.toast('Low HP - retreating'); this.target = null; h.state = 'idle'; this.emit('target'); return false; }
+      this.tryAutoEat();
+      const a = this.data.autoEat;
+      if (this.data.hp < this.maxHp * RETREAT_FRAC && !(a.on && this.foodCount > 0)) { this.toast('Low HP - retreating'); this.target = null; h.state = 'idle'; this.emit('target'); return false; }
     }
     return true;
   }
   hitMonster(m, dmg) {
     const def = MONSTERS[m.kind];
+    const real = Math.min(dmg, m.hp); // xp is for damage actually dealt (no overkill xp)
     m.hp = Math.max(0, m.hp - dmg);
     this.emit('hit', { who: 'monster', id: m.id, x: m.x, dmg, miss: dmg === 0 });
-    if (dmg > 0) {
+    if (real > 0) {
       const st = STANCE_BY_ID[this.data.stance];
-      for (const s of st.xp) this.gain(s, 4 * dmg);
-      this.gain('hitpoints', 1.33 * dmg);
+      for (const s of st.xp) this.gain(s, 4 * real);
+      this.gain('hitpoints', 1.33 * real);
     }
     if (m.hp <= 0) {
       m.dead = 6; this.data.stats.kills++;
@@ -302,20 +339,44 @@ export class Game {
   }
 
   gatherChance(n) { return Math.min(0.9, n.chance + 0.012 * (this.level(n.skill) - n.level)); }
+  /** yields the hero can currently get from a node */
+  availableYields(n) { const lv = this.level(n.skill); return nodeYields(n).filter((y) => y.level <= lv); }
   gather(e, dt) {
     const h = this.hero, n = NODES[e.kind];
     const tool = this.bestTool(n.tool);
-    if (!tool) { this.toast(`You need a ${n.tool}`); this.clearTarget(); return; }
+    if (!tool) { this.toast(`You need a ${TOOL_NAMES[n.tool] || n.tool}`); this.clearTarget(); return; }
+    if (n.bait && !this.count(n.bait)) { this.toast(`Out of ${ITEMS[n.bait].name.toLowerCase()}`); this.clearTarget(); return; }
     h.state = 'gather';
     if (h.cd > 0) return;
     h.cd = n.interval / (1 + 0.2 * tool.toolTier);
     if (this.rng() < this.gatherChance(n)) {
-      const got = this.addItem(n.item, 1);
+      const ys = this.availableYields(n), y = ys[Math.floor(this.rng() * ys.length)];
+      const got = this.addItem(y.item, 1);
       if (!got) { this.toast('Bag is full'); this.clearTarget(); return; }
-      this.gain(n.skill, n.xp);
+      if (n.bait) this.removeItem(n.bait, 1);
+      this.gain(n.skill, y.xp);
       e.dead = n.respawn; e.cd = 0;
-      this.emit('loot', { id: n.item, n: 1, x: e.x, node: true });
+      this.emit('loot', { id: y.item, n: 1, x: e.x, node: true });
       this.emit('change');
     } else this.emit('gatherfail', { x: e.x });
+  }
+
+  // ---- activity persistence (used for offline progress)
+  snapshot(now = Date.now()) {
+    const t = this.targetEnt;
+    this.data.lastSeen = now;
+    this.data.activity = t && (t.type === 'monster' || t.type === 'node') ? { area: this.data.area, target: t.id, kind: t.kind, type: t.type } : null;
+  }
+  /** re-select the saved target after a load (never fails loudly) */
+  resumeActivity() {
+    const a = this.data.activity;
+    if (!a || a.area !== this.data.area) return false;
+    const e = this.ent(a.target);
+    if (!e || e.kind !== a.kind) return false;
+    const toasts = this.listeners; this.listeners = [];
+    const ok = this.select(e.id);
+    this.listeners = toasts;
+    if (ok) this.emit('target');
+    return ok;
   }
 }

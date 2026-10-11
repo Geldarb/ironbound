@@ -1,5 +1,5 @@
 // DOM UI: HUD, target panel, stance row, nav + bottom sheets (gear, skills, bag/bank/shop, craft, map, settings).
-import { SKILLS, STANCES, SLOTS, ITEMS, NODES, MONSTERS, AREAS, AREA_IDS, RECIPES, STATIONS, SHOP_BUY, BAG_SLOTS, TIERS } from './data.js';
+import { SKILLS, SKILL_BY_ID, STANCES, SLOTS, ITEMS, NODES, MONSTERS, AREAS, AREA_IDS, RECIPES, STATIONS, SHOP_BUY, BAG_SLOTS, TIERS, XP_RATE, OFFLINE, nodeYields, burnChance, isFood, isStackable } from './data.js';
 import { levelProgress, xpForLevel } from './xp.js';
 import { heroHitChance } from './combat.js';
 import { iconURL } from './art.js';
@@ -20,7 +20,7 @@ export class UI {
     this.buildNav(); this.buildStance();
     $('sheetClose').onclick = () => this.close();
     $('btnMenu').onclick = () => this.open('settings');
-    $('btnFull').onclick = () => { const d = document.documentElement; if (document.fullscreenElement) document.exitFullscreen?.(); else d.requestFullscreen?.().catch(() => {}); };
+    $('hudFood').onclick = () => { if (!game.eatBest()) this.toast(game.foodCount ? 'Hitpoints already full' : 'No food in your bag'); };
     $('modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal') this.closeModal(); });
     game.on((t, p) => this.onEvent(t, p));
   }
@@ -29,6 +29,7 @@ export class UI {
     else if (t === 'level') this.toast(`${cap(p.skill)} level ${p.level}!`, true);
     else if (t === 'station') {
       if (p.kind === 'furnace' || p.kind === 'anvil') { this.craftMenu = p.kind; this.open('craft'); }
+      else if (p.kind === 'fire' || p.kind === 'range') { this.craftMenu = 'cook'; this.open('craft'); }
       else if (p.kind === 'bank') this.open('bag', { bank: true });
       else if (p.kind === 'store') this.open('bag', { shop: true });
     } else if (t === 'area') this.close();
@@ -55,11 +56,24 @@ export class UI {
     }
   }
   open(id, mode = {}) {
-    this.sheet = id; this.mode = mode; this.closeModal(); $('sheet').hidden = false; this.onSheet?.(true); this.renderSheet();
+    this.sheet = id; this.mode = mode; this.closeModal(); $('sheet').hidden = false; $('sheetBody').scrollTop = 0; this.onSheet?.(true); this.renderSheet();
     for (const b of $('nav').children) b.classList.toggle('on', b.dataset.tab === id);
   }
   close() { this.sheet = null; this.mode = {}; $('sheet').hidden = true; this.onSheet?.(false); for (const b of $('nav').children) b.classList.remove('on'); }
   modal(html) { $('modalCard').innerHTML = html; $('modal').hidden = false; return $('modalCard'); }
+  /** 'Welcome back' popup for an offline-progress report (see offline.js) */
+  showWelcome(rep) {
+    const dur = (s) => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}h ${String(m).padStart(2, '0')}m` : m ? `${m}m` : `${s}s`; };
+    const xp = Object.entries(rep.xp).map(([k, v]) => `<div class="ln"><span>${SKILL_BY_ID[k].name}</span><b>+${fmt(v)} xp</b></div>`).join('');
+    const lv = rep.levels.map((l) => `<div class="ln" style="color:var(--gold)"><span>${SKILL_BY_ID[l.skill].name} level up</span><b>${l.from} → ${l.to}</b></div>`).join('');
+    const items = Object.entries(rep.items).map(([id, n]) => `<span title="${esc(itemName(id))}">${img(id)}x${fmt(n)}</span>`).join('');
+    const ate = Object.entries(rep.ate).map(([id, n]) => `${n} ${itemName(id).toLowerCase()}`).join(', ');
+    const what = rep.activity.type === 'monster' ? `fighting ${rep.activity.name.toLowerCase()}s (${rep.kills} defeated)` : `${rep.activity.name.toLowerCase()} (${rep.catches} gathered)`;
+    const c = this.modal(`<div class="welcome" data-welcome="1"><h3>Welcome back, ${esc(this.g.data.name)}!</h3><div class="note">Away for <b>${dur(rep.away)}</b>${rep.capped ? ` (capped at ${dur(rep.used)})` : ''}. Your hero kept ${what} at ${Math.round(OFFLINE.efficiency * 100)}% pace.${rep.stopped ? ` Stopped early: <b>${esc(rep.stopped)}</b>.` : ''}</div>
+      <div class="lines">${lv}${xp}${rep.coins ? `<div class="ln"><span>Coins</span><b>+${fmt(rep.coins)}</b></div>` : ''}${ate ? `<div class="ln"><span>Food eaten</span><b>${esc(ate)}</b></div>` : ''}</div>${items ? `<div class="items">${items}</div>` : ''}${rep.banked ? `<div class="note">${rep.banked} items did not fit in your bag and went to the bank.</div>` : ''}
+      <button class="btn gold" id="mX" style="width:100%">Continue</button></div>`);
+    c.querySelector('#mX').onclick = () => this.closeModal();
+  }
   closeModal() { $('modal').hidden = true; }
 
   tick(dt) {
@@ -73,6 +87,8 @@ export class UI {
     setText($('hudHpT'), `${d.hp}/${g.maxHp}`); const w = `${Math.round((d.hp / g.maxHp) * 100)}%`; if ($('hudHpFill')._w !== w) { $('hudHpFill')._w = w; $('hudHpFill').style.width = w; }
     setText($('hudCoinsT'), fmt(d.coins));
     for (const b of $('stanceRow').children) b.classList.toggle('on', b.dataset.stance === d.stance);
+    const fc = g.foodCount, chip = $('hudFood'); setText($('hudFoodT'), d.autoEat.on ? `${fc} · ${d.autoEat.pct}%` : String(fc));
+    chip.classList.toggle('auto', d.autoEat.on && fc > 0); chip.classList.toggle('empty', fc === 0);
   }
   updateTarget() {
     const g = this.g, e = g.targetEnt, box = $('target');
@@ -89,9 +105,10 @@ export class UI {
       box.innerHTML = `<div class="tp"><div class="nm"><span>${m.name}</span><em>Lv ${m.level}</em></div><div class="bar"><i style="width:${Math.round((e.dead > 0 ? 0 : e.hp / e.max) * 100)}%"></i></div>
         <div>HP ${e.dead > 0 ? 0 : e.hp}/${e.max} · Hit chance ${Math.round(heroHitChance(hc, m) * 100)}% · Max hit ${hc.maxHit}</div><div class="drops">Drops ${drops}</div></div>`;
     } else {
-      const n = NODES[e.kind], lv = g.level(n.skill);
+      const n = NODES[e.kind], lv = g.level(n.skill), ys = nodeYields(n);
+      const yl = ys.map((y) => `<span title="Lv ${y.level}">${img(y.item)} ${esc(itemName(y.item))}${y.level > lv ? ` <b style="color:#ff8a80">Lv${y.level}</b>` : ''}</span>`).join(' ');
       box.innerHTML = `<div class="tp"><div class="nm"><span>${n.name}</span><em>${cap(n.skill)} ${n.level}</em></div>
-        <div>${e.dead > 0 ? 'Depleted - respawning...' : 'Gathering...'} · Success ${Math.round(g.gatherChance(n) * 100)}% · ${n.xp} xp</div><div class="drops">Yields ${img(n.item)} ${esc(itemName(n.item))} (you: Lv ${lv})</div></div>`;
+        <div>${e.dead > 0 ? 'Depleted - respawning...' : n.skill === 'fishing' ? 'Fishing...' : 'Gathering...'} · Success ${Math.round(g.gatherChance(n) * 100)}% · ${Math.round(ys[0].xp * XP_RATE)} xp${n.bait ? ` · bait: ${g.count(n.bait)}` : ''}</div><div class="drops">Yields ${yl}</div></div>`;
     }
   }
 
@@ -159,9 +176,12 @@ export class UI {
     let extra = '';
     if (it.slot) { const c = g.canEquip(id); extra = `${bonusText(it)}<br><span class="${c.ok ? 'ok' : 'no'}">${c.ok ? `Requires ${cap(it.req.skill)} ${it.req.level}` : c.reason}</span>`; }
     else if (it.tool) extra = `Tool: ${it.tool}${it.toolTier ? ` (tier ${it.toolTier + 1}, faster)` : ''}`;
+    else if (it.heal) extra = `Heals ${it.heal} HP · worth ${g.sellValue(id)} coins`;
     else extra = `Worth ${g.sellValue(id)} coins`;
-    const c = this.modal(`<h3>${img(id)} ${esc(it.name)}</h3><p class="note">${extra}</p><div class="btns">${it.slot ? '<button class="btn gold" id="mEq" style="flex:1">Equip</button>' : ''}<button class="btn" id="mX" style="flex:1">Close</button></div>`);
+    const c = this.modal(`<h3>${img(id)} ${esc(it.name)}</h3><p class="note">${extra}</p><div class="btns">${it.slot ? '<button class="btn gold" id="mEq" style="flex:1">Equip</button>' : ''}${it.heal ? '<button class="btn gold" id="mEat" style="flex:1">Eat</button>' : ''}<button class="btn" id="mX" style="flex:1">Close</button></div>`);
     c.querySelector('#mX').onclick = () => this.closeModal();
+    const eat = c.querySelector('#mEat');
+    if (eat) eat.onclick = () => { g.eat(id); this.closeModal(); };
     const eq = c.querySelector('#mEq');
     if (eq) { eq.disabled = !g.canEquip(id).ok; eq.onclick = () => { g.equip(id); this.closeModal(); }; }
   }
@@ -184,25 +204,29 @@ export class UI {
     }
     b.appendChild(el('div', 'note', '<b>Buy</b>'));
     for (const id of SHOP_BUY) {
-      const r = el('div', 'row', `${img(id)}<div class="tx"><b>${esc(itemName(id))}</b><small>${ITEMS[id].value} coins</small></div><button class="btn sm gold" data-buy="${id}" ${g.data.coins < ITEMS[id].value ? 'disabled' : ''}>Buy</button>`);
-      r.querySelector('button').onclick = () => g.buy(id);
+      const r = el('div', 'row', `${img(id)}<div class="tx"><b>${esc(itemName(id))}</b><small>${ITEMS[id].value} coins${ITEMS[id].tool ? ` · ${ITEMS[id].tool}` : ''}</small></div><div class="btns"><button class="btn sm gold" data-buy="${id}" ${g.data.coins < ITEMS[id].value ? 'disabled' : ''}>Buy</button>${isStackable(id) ? `<button class="btn sm" data-buy10="${id}" ${g.data.coins < ITEMS[id].value * 10 ? 'disabled' : ''}>x10</button>` : ''}</div>`);
+      r.querySelector('[data-buy]').onclick = () => g.buy(id);
+      const b10 = r.querySelector('[data-buy10]'); if (b10) b10.onclick = () => { for (let i = 0; i < 10; i++) if (!g.buy(id)) break; };
       b.appendChild(r);
     }
   }
   r_craft(b) {
     const g = this.g, menu = this.craftMenu;
-    const seg = el('div', 'seg', ['furnace', 'anvil'].map((k) => `<button data-menu="${k}" class="${k === menu ? 'on' : ''}">${STATIONS[k].menu}</button>`).join(''));
-    seg.querySelectorAll('button').forEach((x) => { x.onclick = () => { this.craftMenu = x.dataset.menu; this.renderSheet(); }; });
+    const MENUS = { furnace: 'Smelting', anvil: 'Smithing', cook: 'Cooking' };
+    const seg = el('div', 'seg', Object.entries(MENUS).map(([k, nm]) => `<button data-menu="${k}" class="${k === menu ? 'on' : ''}">${nm}</button>`).join(''));
+    seg.querySelectorAll('button').forEach((x) => { x.onclick = () => { this.craftMenu = x.dataset.menu; this.renderSheet(); $('sheetBody').scrollTop = 0; }; });
     b.appendChild(seg);
-    if (!g.stationVisited(menu)) b.appendChild(el('div', 'warn', `Walk to the ${STATIONS[menu].name} in Starter Meadow (tap it) to unlock this menu.`));
-    else b.appendChild(el('p', 'note', STATIONS[menu].blurb + ` Smithing level ${g.level('smithing')}.`));
+    const sk = menu === 'cook' ? 'cooking' : 'smithing';
+    if (!g.stationVisited(menu)) b.appendChild(el('div', 'warn', menu === 'cook' ? 'Walk up to a campfire or range (tap it) to unlock cooking. Starter Meadow has both.' : `Walk to the ${STATIONS[menu].name} in Starter Meadow (tap it) to unlock this menu.`));
+    else b.appendChild(el('p', 'note', (menu === 'cook' ? `${g.data.visited.range ? 'Using a range (fewer burnt)' : 'Using a campfire (find a range to burn less)'}. ` : STATIONS[menu].blurb + ' ') + `${cap(sk)} level ${g.level(sk)}.`));
     for (const r of RECIPES.filter((x) => x.station === menu)) {
+      if (r.stop && !g.count(r.inputs && Object.keys(r.inputs)[0]) && g.level('cooking') < r.level - 10) continue; // hide far-off dishes until you hold the raw food or are close
       const st = g.recipeStatus(r), out = ITEMS[r.out];
       const ing = Object.entries(r.inputs).map(([id, n]) => `<span class="${g.count(id) >= n ? 'ok' : 'no'}">${esc(itemName(id))} ${g.count(id)}/${n}</span>`).join(', ');
-      const row = el('div', 'row' + (st.ok ? '' : ' off'), `${img(r.out)}<div class="tx"><b>${esc(out.name)} <small>Lv ${r.level}</small></b><small>${ing}</small><small>${r.xp} xp${r.chance < 1 ? ` · ${Math.round(r.chance * 100)}% success` : ''}${out.slot ? ' · ' + bonusText(out) : ''}</small>${st.ok ? '' : `<small class="no">${esc(st.reason)}</small>`}</div>
+      const row = el('div', 'row' + (st.ok ? '' : ' off'), `${img(r.out)}<div class="tx"><b>${esc(out.name)} <small>Lv ${r.level}</small></b><small>${ing}</small><small>${Math.round(r.xp * XP_RATE * 10) / 10} xp${r.chance < 1 ? ` · ${Math.round(r.chance * 100)}% success` : ''}${r.stop ? ` · burn ${Math.round(burnChance(r, g.level('cooking'), !!g.data.visited.range) * 100)}% · heals ${out.heal}` : ''}${out.slot ? ' · ' + bonusText(out) : ''}</small>${st.ok ? '' : `<small class="no">${esc(st.reason)}</small>`}</div>
         <div class="btns"><button class="btn sm" data-n="1">x1</button><button class="btn sm" data-n="5">x5</button><button class="btn sm gold" data-n="99">All</button></div>`);
       row.dataset.recipe = r.id;
-      row.querySelectorAll('[data-n]').forEach((x) => { x.disabled = !st.ok; x.onclick = () => { const res = g.craft(r.id, Number(x.dataset.n)); this.toast(res.done ? `Made ${res.done} ${out.name}${res.failed ? ` (${res.failed} failed)` : ''}` : res.failed ? 'The ore was lost...' : res.reason || 'Cannot craft'); }; });
+      row.querySelectorAll('[data-n]').forEach((x) => { x.disabled = !st.ok; x.onclick = () => { const res = g.craft(r.id, Number(x.dataset.n)); this.toast(res.done ? `Made ${res.done} ${out.name}${res.failed ? ` (${res.failed} ${r.burnt ? 'burnt' : 'failed'})` : ''}` : res.failed ? (r.burnt ? 'Oops, burnt it!' : 'The ore was lost...') : res.reason || 'Cannot craft'); }; });
       b.appendChild(row);
     }
   }
@@ -220,6 +244,13 @@ export class UI {
   }
   r_settings(b) {
     const g = this.g;
+    const ae = g.data.autoEat;
+    const aer = el('div', 'row', `<div class="tx"><b>Auto-eat</b><small>Eats the best food when HP is at or below the threshold. With food, the hero never retreats.</small><div class="seg" style="margin:6px 0 0">${[['off', 0], ['30%', 30], ['50%', 50], ['70%', 70]].map(([l, v]) => `<button data-ae="${v}" class="${(v === 0 ? !ae.on : ae.on && ae.pct === v) ? 'on' : ''}">${l}</button>`).join('')}</div></div>`);
+    aer.querySelectorAll('[data-ae]').forEach((x) => { x.onclick = () => { const v = Number(x.dataset.ae); if (v === 0) g.setAutoEat(false); else g.setAutoEat(true, v); this.renderSheet(); }; });
+    b.appendChild(aer);
+    const fs = el('div', 'row', `<div class="tx"><b>Fullscreen</b></div><button class="btn" id="fsBtn">Toggle</button>`);
+    fs.querySelector('#fsBtn').onclick = () => { const d = document.documentElement; if (document.fullscreenElement) document.exitFullscreen?.(); else d.requestFullscreen?.().catch(() => {}); };
+    b.appendChild(fs);
     b.appendChild(el('div', 'row', `<div class="tx"><b>${esc(g.data.name)}</b><small>Combat ${g.combatLevel} · ${g.data.stats.kills} kills</small></div>`));
     const r = el('div', 'row', `<div class="tx"><b>New character</b><small>Deletes this save and starts over</small></div><button class="btn red" id="rst">Reset</button>`);
     r.querySelector('#rst').onclick = () => {

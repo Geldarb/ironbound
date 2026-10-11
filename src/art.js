@@ -32,6 +32,12 @@ export function drawGlyph(ctx, art, c = '#aab3bf', d = '#5f6875') {
     case 'feather': ctx.beginPath(); ctx.ellipse(0, 0, 6, 17, 0.6, 0, 6.2832); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = OUT; ctx.stroke(); break;
     case 'pelt': ellipse(ctx, 0, 0, 17, 11, c); ellipse(ctx, 0, 0, 9, 5, shade(c, 1.2), null); break;
     case 'coins': for (const [x, y] of [[-8, 6], [6, 6], [-1, -3]]) { ellipse(ctx, x, y, 10, 5, '#f7c948'); ellipse(ctx, x, y - 2, 10, 5, '#ffe27a'); } break;
+    case 'fish': ctx.save(); ctx.rotate(-0.35); ellipse(ctx, 0, 0, 17, 9, c); poly(ctx, [[14, 0], [26, -9], [26, 9]], shade(c, 0.85)); circle(ctx, -9, -2, 2, OUT, null); ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(-1, 0, 7, -1, 1); ctx.stroke(); ctx.restore(); break;
+    case 'meat': ctx.save(); ctx.rotate(-0.5); rrect(ctx, 6, -3, 20, 6, 3, '#f3ead2'); circle(ctx, 27, -3, 4, '#f3ead2'); circle(ctx, 27, 3, 4, '#f3ead2'); ellipse(ctx, -2, 0, 17, 12, c); ellipse(ctx, -5, -3, 7, 4, shade(c, 1.25), null); ctx.restore(); break;
+    case 'net': ctx.save(); ctx.translate(0, -10); circle(ctx, 0, 0, 14, 'rgba(240,230,200,.35)', '#8a5a30', 3); ctx.strokeStyle = '#d8cfae'; ctx.lineWidth = 1; for (let i = -10; i <= 10; i += 5) { ctx.beginPath(); ctx.moveTo(i, -9); ctx.lineTo(i, 9); ctx.moveTo(-9, i); ctx.lineTo(9, i); ctx.stroke(); } ctx.restore(); rrect(ctx, -2, 4, 4, 22, 2, '#8a5a30'); break;
+    case 'rod': ctx.save(); ctx.rotate(0.35); rrect(ctx, -2, -26, 4, 54, 2, '#8a5a30'); ctx.restore(); ctx.strokeStyle = OUT; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-9, -26); ctx.lineTo(-9, 4); ctx.stroke(); circle(ctx, -9, 6, 3, '#d8453c'); break;
+    case 'harpoon': rrect(ctx, -2, -20, 4, 48, 2, '#8a5a30'); poly(ctx, [[0, -32], [-7, -18], [7, -18]], c); rrect(ctx, -9, -20, 18, 3, 1, c); break;
+    case 'pot': ctx.beginPath(); ctx.ellipse(0, 0, 15, 12, 0, 0, 6.2832); ctx.fillStyle = c; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = OUT; ctx.stroke(); ctx.strokeStyle = shade(c, 0.6); ctx.lineWidth = 1.5; for (let i = -10; i <= 10; i += 5) { ctx.beginPath(); ctx.moveTo(i, -9); ctx.lineTo(i, 9); ctx.stroke(); } ellipse(ctx, 0, -8, 7, 3, '#2b2233', null); break;
     default: rrect(ctx, -10, -10, 20, 20, 4, '#999');
   }
 }
@@ -83,7 +89,7 @@ export function drawHero(ctx, x, y, s, o) {
   rrect(ctx, -3, -2, 7, 20, 3.5, L.skin);
   ctx.translate(1, 18); ctx.rotate(-1.2 + (state === 'attack' || state === 'gather' ? ang : 0)); ctx.scale(0.8, 0.8);
   const wep = state === 'gather' ? null : ITEMS[equip.weapon];
-  if (state === 'gather' && tool) drawGlyph(ctx, tool, '#c9a46a');
+  if (state === 'gather' && tool) drawGlyph(ctx, tool === 'cage' ? 'pot' : tool, '#c9a46a');
   else if (wep) drawGlyph(ctx, wep.art, wep.c, wep.d);
   ctx.restore();
   ctx.restore();
@@ -116,8 +122,17 @@ export function drawMonster(ctx, kind, x, y, s, o) {
 }
 
 // ---- world props
-export function drawNode(ctx, kind, x, y, s, depleted, color) {
+export function drawNode(ctx, kind, x, y, s, depleted, color, t = 0) {
   ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  if (kind === 'pond' || kind === 'stream' || kind === 'deep' || kind === 'cage') {
+    ellipse(ctx, 0, 2, 46, 13, shade(color, 0.7)); ellipse(ctx, 0, 0, 42, 10, color, null);
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 2;
+    for (let i = 0; i < 2; i++) { const r = ((t * 0.7 + i * 0.5) % 1); ctx.globalAlpha = 1 - r; ctx.beginPath(); ctx.ellipse(-10 + i * 22, -1, 6 + r * 14, 2 + r * 4, 0, 0, 6.28); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    const j = Math.sin(t * 3 + x) * 2; poly(ctx, [[8, -2 + j], [14, -13 + j], [19, -2 + j]], 'rgba(255,255,255,.85)', OUT, 1.5);
+    if (kind === 'cage') { rrect(ctx, -22, -6, 12, 10, 3, '#b9824a'); }
+    ctx.restore(); return;
+  }
   ellipse(ctx, 0, 0, 24, 5, 'rgba(0,0,0,.2)', null);
   if (kind === 'tree' || kind === 'oak') {
     const g = depleted ? '#6b7a4e' : color;
@@ -143,6 +158,13 @@ export function drawStation(ctx, kind, x, y, s, t = 0) {
   } else if (kind === 'anvil') {
     rrect(ctx, -20, -16, 40, 16, 3, '#5a4a3a'); rrect(ctx, -10, -26, 20, 12, 2, '#6a727c');
     poly(ctx, [[-30, -40], [30, -40], [38, -34], [22, -26], [-22, -26], [-30, -32]], '#8a929c'); rrect(ctx, -26, -40, 40, 5, 2, '#b8c0c8', null);
+  } else if (kind === 'fire') {
+    for (const [dx, a] of [[-14, 0.3], [14, -0.3], [0, 0]]) { ctx.save(); ctx.translate(dx, -4); ctx.rotate(a + 1.57); rrect(ctx, -14, -3, 28, 6, 3, '#6a4524'); ctx.restore(); }
+    const f = 0.8 + Math.sin(t * 11) * 0.2, f2 = 0.8 + Math.sin(t * 7 + 1) * 0.2;
+    poly(ctx, [[-14, -6], [-6, -34 * f], [0, -16], [6, -42 * f2], [14, -6]], '#ff8a1e'); poly(ctx, [[-7, -6], [0, -26 * f2], [8, -6]], '#ffd34a', null);
+  } else if (kind === 'range') {
+    rrect(ctx, -28, -50, 56, 50, 6, '#6a6f78'); rrect(ctx, -22, -42, 44, 20, 4, '#2b2233'); circle(ctx, -8, -32, 5 + Math.sin(t * 9) * 0.8, '#ff8a1e', null); circle(ctx, 8, -32, 5 + Math.cos(t * 9) * 0.8, '#ff8a1e', null);
+    rrect(ctx, -22, -18, 44, 5, 2, '#9aa3ad'); rrect(ctx, 20, -62, 8, 14, 2, '#4a4f58'); circle(ctx, 0, -8, 3, '#c9d6e3');
   } else if (kind === 'bank') {
     rrect(ctx, -30, -34, 60, 34, 5, '#8a5a30'); ctx.beginPath(); ctx.roundRect(-30, -50, 60, 22, [14, 14, 0, 0]); ctx.fillStyle = '#a56a38'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = OUT; ctx.stroke();
     rrect(ctx, -32, -30, 64, 6, 1, '#d6b24a'); rrect(ctx, -6, -34, 12, 14, 3, '#f1d77a'); circle(ctx, 0, -27, 2, OUT, null);

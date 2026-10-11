@@ -52,6 +52,7 @@ export class Scene {
       if (!m) this.flash[p.id] = 0.15;
     } else if (type === 'xp') this.floater(p.x, `+${Math.round(p.amount)} ${p.skill.slice(0, 3)}`, '#ffe27a', 'text', 6 + (this.floaters.length % 3) * 14);
     else if (type === 'loot') this.floater(p.x, `+${p.n} ${p.id.replace(/_/g, ' ')}`, '#fff', 'text', 66);
+    else if (type === 'heal') this.floaters.push({ x: p.x, y: GROUND - 78, text: String(p.n), color: '#3fb950', kind: 'splat', age: 0 });
     else if (type === 'gatherfail') this.floater(p.x, '...', '#ddd', 'text', 30);
   }
   draw(now = performance.now()) {
@@ -93,7 +94,7 @@ export class Scene {
     const tgt = g.targetEnt;
     for (const e of sorted) {
       if (e.x < this.cam - 90 || e.x > this.cam + this.viewW + 90) continue;
-      if (e.type === 'node') { const n = NODES[e.kind]; drawNode(ctx, e.kind, e.x, GROUND, 1.05, e.dead > 0, n.color); }
+      if (e.type === 'node') { const n = NODES[e.kind]; drawNode(ctx, e.kind, e.x, GROUND, 1.05, e.dead > 0, n.color, this.t); }
       else if (e.type === 'station') { drawStation(ctx, e.kind, e.x, GROUND, 1.1, this.t); this.label(e.x, STATIONS[e.kind].name); }
       else if (e.type === 'sign') { drawSign(ctx, e.x, GROUND, 1, AREAS[e.kind].name.split(' ').pop(), this.t, e.kind === 'meadow'); }
       else if (e.type === 'monster') {
