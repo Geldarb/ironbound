@@ -70,17 +70,22 @@ export class Game {
   get slotsUsed() { return this.data.bag.length; }
   canAdd(id) { return id === 'coins' || (isStackable(id) && this.data.bag.some((s) => s.id === id)) || this.slotsUsed < BAG_SLOTS; }
   /** returns how many were added */
-  addItem(id, n = 1, ench = null) {
+  addItem(id, n = 1, ench = null, gem = null) {
     if (n <= 0) return 0;
     if (id === 'coins') { this.data.coins += n; return n; }
-    if (isStackable(id)) {
-      const s = this.data.bag.find((x) => x.id === id);
+    if (isStackable(id) && !ench && !gem) {
+      const s = this.data.bag.find((x) => x.id === id && !x.e && !x.gem);
       if (s) { s.n += n; return n; }
       if (this.slotsUsed >= BAG_SLOTS) return 0;
       this.data.bag.push({ id, n }); return n;
     }
     let added = 0;
-    for (let i = 0; i < n && this.slotsUsed < BAG_SLOTS; i++) { this.data.bag.push(ench ? { id, n: 1, e: ench } : { id, n: 1 }); added++; }
+    for (let i = 0; i < n && this.slotsUsed < BAG_SLOTS; i++) {
+      const slot = { id, n: 1 };
+      if (ench) slot.e = ench;
+      if (gem) slot.gem = gem;
+      this.data.bag.push(slot); added++;
+    }
     return added;
   }
   removeItem(id, n = 1) {
@@ -253,8 +258,10 @@ export class Game {
     this.data.coins -= price; this.addItem(id, 1); this.emit('change'); return true;
   }
   deposit(id, n = 1, idx = -1) {
-    if (idx >= 0 && this.data.bag[idx]?.id === id && this.data.bag[idx].e) { // enchanted gear is banked as its own instance
-      const [s] = this.data.bag.splice(idx, 1); this.data.bankGear.push({ id, e: s.e }); this.emit('change'); return 1;
+    if (idx >= 0 && this.data.bag[idx]?.id === id && (this.data.bag[idx].e || this.data.bag[idx].gem)) {
+      const [s] = this.data.bag.splice(idx, 1);
+      this.data.bankGear.push({ id, e: s.e, gem: s.gem });
+      this.emit('change'); return 1;
     }
     n = Math.min(n, this.count(id));
     if (n <= 0) return 0;
@@ -271,7 +278,7 @@ export class Game {
   withdrawGear(i) {
     const g = this.data.bankGear[i];
     if (!g) return false;
-    if (!this.addItem(g.id, 1, g.e)) { this.toast('Bag is full'); return false; }
+    if (!this.addItem(g.id, 1, g.e, g.gem)) { this.toast('Bag is full'); return false; }
     this.data.bankGear.splice(i, 1); this.emit('change'); return true;
   }
 

@@ -205,7 +205,7 @@ export class UI {
       b.appendChild(el('div', 'note', `<b>Bank</b> ${bank.length + gear.length} item types`));
       const bg = el('div', 'grid');
       bank.forEach(([id, n]) => bg.appendChild(cell(id, n, null, () => this.itemPrompt(id, n, 'Withdraw', (k) => g.withdraw(id, k)))));
-      gear.forEach((x, i) => bg.appendChild(cell(x.id, 1, x.e, () => g.withdrawGear(i))));
+      gear.forEach((x, i) => bg.appendChild(cell(x.id, 1, x.e, () => g.withdrawGear(i), null, x.gem)));
       b.appendChild(bank.length || gear.length ? bg : el('p', 'note', 'Your bank is empty.'));
       return;
     }

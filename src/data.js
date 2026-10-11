@@ -32,8 +32,8 @@ export const PRAYERS = [
 export const PRAYER_BY_ID = Object.fromEntries(PRAYERS.map((p) => [p.id, p]));
 /** Bone types: base XP when buried anywhere, altar XP (bonus), and EP chance per bone when used at the prayer altar. */
 export const BONES = {
-  bones: { name: 'Bones', xp: 4.5, altarXp: 9, epChance: 0.15, epFlat: 0 },
-  big_bones: { name: 'Big bones', xp: 15, altarXp: 30, epChance: 0.35, epFlat: 1 },
+  bones: { name: 'Bones', xp: 4.5, altarXp: 9, epChance: 0.4, epFlat: 1 },
+  big_bones: { name: 'Big bones', xp: 15, altarXp: 30, epChance: 0.6, epFlat: 2 },
 };
 export const BONE_XP = Object.fromEntries(Object.entries(BONES).map(([k, v]) => [k, v.xp]));
 
@@ -117,6 +117,7 @@ add('runite_ore', { name: 'Runite ore', stack: true, value: 300, art: 'ore', c: 
 add('logs', { name: 'Logs', stack: true, value: 4, art: 'log', c: '#b9824a' });
 add('oak_logs', { name: 'Oak logs', stack: true, value: 10, art: 'log', c: '#9a6a3a' });
 add('enchant_gem', { name: 'Enchantment gem', stack: false, value: 50, art: 'gem', c: '#b266ff' });
+add('bones', { name: 'Bones', stack: true, value: 1, art: 'bones', c: '#f3ead2' });
 add('big_bones', { name: 'Big bones', stack: true, value: 8, art: 'bones', c: '#e8dcc0' });
 add('feather', { name: 'Feather', stack: true, value: 2, art: 'feather', c: '#ffffff' });
 add('wolf_pelt', { name: 'Wolf pelt', stack: true, value: 18, art: 'pelt', c: '#8a8f98' });
@@ -244,7 +245,7 @@ export const nodeYields = (n) => n.yields || [{ item: n.item, level: n.level, xp
 export const AREAS = {
   meadow: {
     name: 'Starter Meadow', width: 2300, spawn: 160, req: { combat: 1 }, sky: ['#bfe8ff', '#e8f7ff'], hill: ['#8fd48a', '#6fbf6a'], ground: '#59b857',
-    entities: [['station', 'altar', 225], ['station', 'prayer_altar', 280], ['station', 'bank', 300], ['station', 'store', 430], ['station', 'range', 520], ['station', 'furnace', 610], ['station', 'anvil', 720],
+    entities: [['station', 'altar', 225], ['station', 'prayer_altar', 380], ['station', 'bank', 520], ['station', 'store', 640], ['station', 'range', 760], ['station', 'furnace', 860], ['station', 'anvil', 960],
       ['node', 'pond', 830], ['node', 'tree', 930], ['node', 'tree', 1020], ['station', 'fire', 1100], ['node', 'copper', 1190], ['node', 'tin', 1270],
       ['monster', 'chicken', 1430], ['monster', 'chicken', 1510], ['monster', 'cow', 1650], ['monster', 'cow', 1730], ['monster', 'goblin', 1870], ['monster', 'goblin', 1960], ['sign', 'quarry', 2190]],
   },
