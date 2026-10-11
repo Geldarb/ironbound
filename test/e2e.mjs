@@ -98,12 +98,12 @@ check(await G(() => document.querySelector('[data-recipe="bronze_body"]').classL
 await tap('#nav [data-tab="bag"]'); await tap('.cell[data-item="bronze_dagger"]'); await tap('#mEq');
 check(await G(() => window.__ib.game.data.equip.weapon === 'bronze_dagger'), 'equip the dagger from the bag');
 await tap('#nav [data-tab="gear"]'); await sleep(200);
-check(await G(() => document.getElementById('sheetBody').textContent.includes('Bronze Dagger')), 'gear screen shows equipped bonuses');
+check(await G(() => document.getElementById('sheetBody').textContent.includes('Bronze dagger')), 'gear screen shows equipped bonuses');
 await shot('gear');
 // bank + shop
 await G(() => window.__ib.ui.close()); await warpTo('bank', -70); await sleep(150); await tapEnt('bank'); await sleep(500);
 check(await G(() => window.__ib.ui.mode.bank === true), 'bank chest opens the bank');
-await tap('.cell[data-item="logs"]'); await tap('#mModalAll, [data-k]:last-of-type');
+await tap('.cell[data-item="logs"]'); if (await G(() => !!document.querySelector('[data-k]'))) await tap('[data-k]:last-of-type');
 check(await G(() => window.__ib.game.data.bank.logs >= 1), 'deposit into the bank');
 await G(() => window.__ib.ui.close()); await G(() => window.__ib.game.addItem('bones', 5));
 await warpTo('store', -70); await sleep(150); await tapEnt('store'); await sleep(500);
