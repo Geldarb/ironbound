@@ -1,5 +1,5 @@
 // DOM UI: HUD, target panel, stance row, nav + bottom sheets (gear, skills, bag/bank/shop, craft, map, settings).
-import { SKILLS, SKILL_BY_ID, STANCES, SLOTS, ITEMS, NODES, MONSTERS, AREAS, AREA_IDS, RECIPES, STATIONS, SHOP_BUY, BAG_SLOTS, TIERS, XP_RATE, WEAPON_KINDS, TIER_BAR, OFFLINE, nodeYields, burnChance, isFood, isStackable } from './data.js';
+import { SKILLS, SKILL_BY_ID, STANCES, SLOTS, ITEMS, NODES, MONSTERS, AREAS, AREA_IDS, RECIPES, STATIONS, SHOP_BUY, BAG_SLOTS, TIERS, XP_RATE, WEAPON_KINDS, TIER_BAR, OFFLINE, nodeYields, burnChance, isFood, isStackable, PRAYERS, BONE_XP, BONES } from './data.js';
 import { levelProgress, xpForLevel } from './xp.js';
 import { RARITIES, rarityOf, modText, rollCost, enchantCategory, isEnchantable, PITY_EPIC } from './enchant.js';
 import { heroHitChance, weaponKind } from './combat.js';
@@ -31,6 +31,7 @@ export class UI {
     else if (t === 'level') this.toast(`${cap(p.skill)} level ${p.level}!`, true);
     else if (t === 'station') {
       if (p.kind === 'altar') this.open('altar');
+      else if (p.kind === 'prayer_altar') this.open('prayer');
       else if (p.kind === 'furnace' || p.kind === 'anvil') { this.craftMenu = p.kind; this.open('craft'); }
       else if (p.kind === 'fire' || p.kind === 'range') { this.craftMenu = 'cook'; this.open('craft'); }
       else if (p.kind === 'bank') this.open('bag', { bank: true });
@@ -123,7 +124,7 @@ export class UI {
 
   renderSheet(keepScroll = false) {
     const body = $('sheetBody'), top = body.scrollTop, g = this.g;
-    const t = { gear: 'Equipment', skills: 'Skills', bag: this.mode.bank ? 'Bank' : this.mode.shop ? 'General store' : 'Bag', craft: 'Crafting', map: 'World map', settings: 'Settings', altar: 'Enchanting altar' }[this.sheet];
+    const t = { gear: 'Equipment', skills: 'Skills', bag: this.mode.bank ? 'Bank' : this.mode.shop ? 'General store' : 'Bag', craft: 'Crafting', map: 'World map', settings: 'Settings', altar: 'Enchanting altar', prayer: 'Prayer altar' }[this.sheet];
     $('sheetTitle').textContent = t;
     body.innerHTML = '';
     this['r_' + this.sheet](body);
@@ -148,9 +149,40 @@ export class UI {
     }
     b.appendChild(el('p', 'note', 'Equip gear from your Bag. Smith it at the anvil in Starter Meadow. Higher tiers need more Attack/Defence.'));
   }
+  r_prayer(b) {
+    const g = this.g;
+    b.appendChild(el('div', 'row', `<div class="tx"><b>Prayer altar</b><small>Offer bones here for double Prayer XP and a chance of Enchant Points.</small></div>`));
+    b.appendChild(el('div', 'note', `Prayer points ${g.prayerPoints}/${g.maxPrayer} · ✨ ${g.ep} EP`));
+    const restoreBtn = el('button', 'btn gold', 'Restore prayer points');
+    restoreBtn.style.margin = '6px 0';
+    restoreBtn.disabled = g.prayerPoints >= g.maxPrayer;
+    restoreBtn.onclick = () => { g.restorePrayer(); this.renderSheet(); };
+    b.appendChild(restoreBtn);
+    const boneIds = Object.keys(BONES).filter((id) => g.count(id) > 0);
+    if (!boneIds.length) {
+      b.appendChild(el('p', 'note', 'No bones in your bag. Kill monsters to collect them.'));
+      return;
+    }
+    for (const id of boneIds) {
+      const bdef = BONES[id], n = g.count(id);
+      const r = el('div', 'row', `${img(id)}<div class="tx"><b>${esc(bdef.name)} x${n}</b><small>Altar: +${bdef.altarXp} Prayer · ${Math.round(bdef.epChance * 100)}% EP chance${bdef.epFlat ? ` +${bdef.epFlat} EP` : ''}</small></div><div class="btns"><button class="btn sm" data-n="1">1</button>${n >= 5 ? '<button class="btn sm" data-n="5">5</button>' : ''}${n > 1 ? `<button class="btn sm gold" data-n="${n}">All</button>` : ''}</div>`);
+      r.querySelectorAll('[data-n]').forEach((x) => {
+        x.onclick = () => { g.buryAtAltar(id, Number(x.dataset.n)); this.renderSheet(); };
+      });
+      b.appendChild(r);
+    }
+  }
   r_skills(b) {
     const g = this.g;
     b.appendChild(el('div', 'row', `<div class="tx"><b>Combat level ${g.combatLevel}</b><small>Attack, Strength, Defence, Hitpoints</small></div>`));
+    b.appendChild(el('div', 'row', `<div class="tx"><b>Prayer points ${g.prayerPoints}/${g.maxPrayer}</b><small>Bury bones for XP. Activate prayers below.</small></div>`));
+    for (const p of PRAYERS) {
+      const on = g.data.activePrayers.includes(p.id);
+      const can = g.level('prayer') >= p.level;
+      const r = el('div', 'row', `<div class="tx"><b>${p.name}</b><small>Level ${p.level} · ${p.blurb} · drain ${p.drain}/s</small></div><button class="btn sm${on ? ' gold' : ''}" ${can ? '' : 'disabled'}>${on ? 'On' : 'Off'}</button>`);
+      r.querySelector('button').onclick = () => g.togglePrayer(p.id);
+      b.appendChild(r);
+    }
     for (const s of SKILLS) {
       const xp = g.data.xp[s.id], lv = g.level(s.id);
       const r = el('div', 'row', `<div class="tx"><b>${s.name} <span style="float:right;color:var(--gold)">${lv}</span></b><small>${lv >= 99 ? 'Max level' : `${fmt(xp)} xp · ${fmt(xpForLevel(lv + 1) - xp)} to next`}</small><div class="xpbar"><i style="width:${Math.round(levelProgress(xp) * 100)}%;background:${s.color}"></i></div></div>`);
@@ -201,11 +233,14 @@ export class UI {
     } else if (it.tool) extra = `Tool: ${it.tool}${it.toolTier ? ` (tier ${it.toolTier + 1}, faster)` : ''}`;
     else if (it.heal) extra = `Heals ${it.heal} HP · worth ${g.sellValue(id)} coins`;
     else extra = `Worth ${g.sellValue(id)} coins`;
+    const canBury = !!BONE_XP[id];
     const ench = e ? `<div class="enchBox" style="border-color:${rc.color}"><b style="color:${rc.color}">${rc.name} enchant</b>${e.mods.map((m) => `<div>${modText(m)}</div>`).join('')}</div>` : '';
-    const c = this.modal(`<h3${rc ? ` style="color:${rc.color}"` : ''}>${img(id)} ${esc(it.name)}</h3><p class="note">${extra}</p>${ench}<div class="btns">${it.slot ? '<button class="btn gold" id="mEq" style="flex:1">Equip</button>' : ''}${it.heal ? '<button class="btn gold" id="mEat" style="flex:1">Eat</button>' : ''}${isEnchantable(id) ? '<button class="btn" id="mEn" style="flex:1">Enchant</button>' : ''}<button class="btn" id="mX" style="flex:1">Close</button></div>`);
+    const c = this.modal(`<h3${rc ? ` style="color:${rc.color}"` : ''}>${img(id)} ${esc(it.name)}</h3><p class="note">${extra}</p>${ench}<div class="btns">${it.slot ? '<button class="btn gold" id="mEq" style="flex:1">Equip</button>' : ''}${it.heal ? '<button class="btn gold" id="mEat" style="flex:1">Eat</button>' : ''}${canBury ? '<button class="btn gold" id="mBury" style="flex:1">Bury</button>' : ''}${isEnchantable(id) ? '<button class="btn" id="mEn" style="flex:1">Enchant</button>' : ''}<button class="btn" id="mX" style="flex:1">Close</button></div>`);
     c.querySelector('#mX').onclick = () => this.closeModal();
     const eat = c.querySelector('#mEat');
     if (eat) eat.onclick = () => { g.eat(id); this.closeModal(); };
+    const bury = c.querySelector('#mBury');
+    if (bury) bury.onclick = () => { g.bury(id); this.closeModal(); };
     const en = c.querySelector('#mEn');
     if (en) en.onclick = () => { this.altar = { loc: { where: 'bag', idx }, cand: null, lock: -1 }; this.open('altar'); };
     const eq = c.querySelector('#mEq');
