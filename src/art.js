@@ -60,6 +60,10 @@ export function drawGlyph(ctx, art, c = '#aab3bf', d = '#5f6875') {
     case 'bar': poly(ctx, [[-16, 8], [-10, -6], [14, -6], [18, 8]], c, OUT); poly(ctx, [[-10, -6], [14, -6], [12, -10], [-6, -10]], shade(c, 1.25), OUT); break;
     case 'log': rrect(ctx, -17, -7, 34, 15, 6, c); ellipse(ctx, 17, 0.5, 4, 7.5, shade(c, 1.35)); ctx.strokeStyle = shade(c, 0.7); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-10, -2); ctx.lineTo(8, -2); ctx.moveTo(-12, 3); ctx.lineTo(6, 3); ctx.stroke(); break;
     case 'bones': ctx.save(); ctx.rotate(-0.6); rrect(ctx, -16, -3, 32, 6, 3, c); circle(ctx, -17, -3, 4, c); circle(ctx, -17, 3, 4, c); circle(ctx, 17, -3, 4, c); circle(ctx, 17, 3, 4, c); ctx.restore(); break;
+    case 'gem': {
+      const shade = (h) => { const n = parseInt(h.slice(1), 16); const f = (v) => Math.round(v * 0.7).toString(16).padStart(2, '0'); return `#${f(n >> 16)}${f((n >> 8) & 255)}${f(n & 255)}`; };
+      poly(ctx, [[0, -16], [12, -4], [8, 14], [-8, 14], [-12, -4]], c); poly(ctx, [[0, -16], [12, -4], [0, 2]], shade(c), null); break;
+    }
     case 'feather': ctx.beginPath(); ctx.ellipse(0, 0, 6, 17, 0.6, 0, 6.2832); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = OUT; ctx.stroke(); break;
     case 'pelt': ellipse(ctx, 0, 0, 17, 11, c); ellipse(ctx, 0, 0, 9, 5, shade(c, 1.2), null); break;
     case 'coins': for (const [x, y] of [[-8, 6], [6, 6], [-1, -3]]) { ellipse(ctx, x, y, 10, 5, '#f7c948'); ellipse(ctx, x, y - 2, 10, 5, '#ffe27a'); } break;

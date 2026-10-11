@@ -116,7 +116,7 @@ add('adamant_ore', { name: 'Adamantite ore', stack: true, value: 100, art: 'ore'
 add('runite_ore', { name: 'Runite ore', stack: true, value: 300, art: 'ore', c: '#38c8d8' });
 add('logs', { name: 'Logs', stack: true, value: 4, art: 'log', c: '#b9824a' });
 add('oak_logs', { name: 'Oak logs', stack: true, value: 10, art: 'log', c: '#9a6a3a' });
-add('bones', { name: 'Bones', stack: true, value: 1, art: 'bones', c: '#f3ead2' });
+add('enchant_gem', { name: 'Enchantment gem', stack: false, value: 50, art: 'gem', c: '#b266ff' });
 add('big_bones', { name: 'Big bones', stack: true, value: 8, art: 'bones', c: '#e8dcc0' });
 add('feather', { name: 'Feather', stack: true, value: 2, art: 'feather', c: '#ffffff' });
 add('wolf_pelt', { name: 'Wolf pelt', stack: true, value: 18, art: 'pelt', c: '#8a8f98' });

@@ -44,6 +44,31 @@ export function enchantCategory(id) {
 export const isEnchantable = (id) => !!enchantCategory(id);
 export const rarityOf = (e) => (e ? RARITIES[e.r] : null);
 
+/** scale used when combining two identical gems / upgrading a mod */
+export const UPGRADE_SCALE = 1.35;
+/** max mods an enchant of a given rarity can hold (from RARITIES.n[1]) */
+export const maxMods = (rarity) => RARITIES[rarity]?.n[1] || 1;
+
+/** create a gem data object from a single mod + the source rarity */
+export function gemFromMod(mod, rarity) {
+  return { k: mod.k, v: mod.v, r: rarity, fam: mod.fam };
+}
+/** text for a gem */
+export function gemText(g) {
+  const r = RARITIES[g.r];
+  return `${r.name} ${MODS[g.k].name}: ${modText({ k: g.k, v: g.v, fam: g.fam })}`;
+}
+/** whether two gems can be combined (same effect and rarity) */
+export function canCombineGems(a, b) {
+  return a && b && a.k === b.k && a.r === b.r && (a.fam || '') === (b.fam || '');
+}
+/** produce an upgraded gem from two identical ones */
+export function combineGems(a, b) {
+  const v = Math.min(MODS[a.k].cap || 1000, Math.round(Math.max(a.v, b.v) * UPGRADE_SCALE * 10) / 10);
+  const nextR = Math.min(RARITIES.length - 1, a.r + (a.r < 3 ? 1 : 0)); // bump rarity up to Epic when combining lower tiers
+  return { k: a.k, v, r: nextR, fam: a.fam };
+}
+
 /** rarity index for a roll. `pity` = rolls since the last Epic+: >= 10 guarantees Rare+, >= 20 guarantees Epic+ */
 export function rollRarity(rng, pity = 0) {
   const min = pity >= PITY_EPIC ? 3 : pity >= PITY_RARE ? 2 : 0;

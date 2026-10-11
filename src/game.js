@@ -2,7 +2,7 @@
 import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood, stanceXp, PRAYERS, PRAYER_BY_ID, BONE_XP, BONES } from './data.js';
 import { levelForXp } from './xp.js';
 import { heroCombat, heroHitChance, monsterHitChance, combatLevel } from './combat.js';
-import { sumMods, rollEnchant, rollCost, nextPity, enchantCategory } from './enchant.js';
+import { sumMods, rollEnchant, rollCost, nextPity, enchantCategory, gemFromMod, canCombineGems, combineGems as combineGemData, maxMods, MODS } from './enchant.js';
 
 export const TOOL_NAMES = { pickaxe: 'pickaxe', axe: 'axe', net: 'small fishing net', rod: 'fishing rod', harpoon: 'harpoon', cage: 'lobster pot', hammer: 'hammer' };
 export const WALK_SPEED = 150;
@@ -300,6 +300,71 @@ export class Game {
     const cur = this.enchOf(loc);
     if (keepNew) this.setEnch(loc, cand); else if (cur) cur.rolls = cand.rolls;
     this.emit('change');
+  }
+
+  // ---- enchantment gems
+  /** extract a selected mod from an enchanted item into a gem. Destroys the source item. */
+  extractGem(loc, modIdx) {
+    const id = this.idOf(loc), e = this.enchOf(loc);
+    if (!e || modIdx < 0 || modIdx >= e.mods.length) return false;
+    if (this.slotsUsed >= BAG_SLOTS) { this.toast('Bag is full'); return false; }
+    const mod = e.mods[modIdx];
+    const gem = gemFromMod(mod, e.r);
+    // destroy the source item
+    if (loc.where === 'bag') this.data.bag.splice(loc.idx, 1);
+    else { this.data.equip[loc.slot] = null; delete this.data.equipEnch[loc.slot]; }
+    this.data.bag.push({ id: 'enchant_gem', n: 1, gem });
+    this.toast(`Extracted ${modText(mod)} into a gem`);
+    this.emit('change');
+    return true;
+  }
+  /** apply a gem to a target item (adds the mod or upgrades a matching one). Consumes the gem. */
+  applyGem(gemIdx, targetLoc) {
+    const gemSlot = this.data.bag[gemIdx];
+    if (!gemSlot || gemSlot.id !== 'enchant_gem' || !gemSlot.gem) return false;
+    const targetId = this.idOf(targetLoc);
+    if (!enchantCategory(targetId)) { this.toast('That item cannot be enchanted'); return false; }
+    const cat = enchantCategory(targetId);
+    const gem = gemSlot.gem;
+    if (!MODS[gem.k]?.cats.includes(cat) && !(ITEMS[targetId].tool && MODS[gem.k]?.cats.includes('tool'))) {
+      this.toast('This gem cannot be applied to that item'); return false;
+    }
+    let e = this.enchOf(targetLoc);
+    if (!e) {
+      e = { r: gem.r, mods: [{ k: gem.k, v: gem.v, fam: gem.fam }], rolls: 0 };
+      this.setEnch(targetLoc, e);
+    } else {
+      const existing = e.mods.find((m) => m.k === gem.k && (m.fam || '') === (gem.fam || ''));
+      if (existing) {
+        existing.v = Math.min(MODS[gem.k].cap || 1000, Math.round(Math.max(existing.v, gem.v) * 1.35 * 10) / 10);
+        if (gem.r > e.r) e.r = gem.r;
+      } else if (e.mods.length < maxMods(e.r)) {
+        e.mods.push({ k: gem.k, v: gem.v, fam: gem.fam });
+        if (gem.r > e.r) e.r = gem.r;
+      } else {
+        this.toast('No room for another modifier'); return false;
+      }
+    }
+    this.data.bag.splice(gemIdx, 1);
+    this.toast('Gem applied');
+    this.emit('change');
+    return true;
+  }
+  /** combine two identical gems into one upgraded gem. Consumes both. */
+  combineGems(idx1, idx2) {
+    if (idx1 === idx2) return false;
+    const a = this.data.bag[idx1], b = this.data.bag[idx2];
+    if (!a || !b || a.id !== 'enchant_gem' || b.id !== 'enchant_gem' || !a.gem || !b.gem) return false;
+    if (!canCombineGems(a.gem, b.gem)) { this.toast('Gems must match in effect and rarity'); return false; }
+    const upgraded = combineGemData(a.gem, b.gem);
+    // remove higher index first
+    const hi = Math.max(idx1, idx2), lo = Math.min(idx1, idx2);
+    this.data.bag.splice(hi, 1);
+    this.data.bag.splice(lo, 1);
+    this.data.bag.push({ id: 'enchant_gem', n: 1, gem: upgraded });
+    this.toast('Gems combined');
+    this.emit('change');
+    return true;
   }
 
   // ---- crafting (furnace / anvil). Stations must have been visited (tapped in the world) once.

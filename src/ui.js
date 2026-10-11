@@ -1,7 +1,7 @@
 // DOM UI: HUD, target panel, stance row, nav + bottom sheets (gear, skills, bag/bank/shop, craft, map, settings).
 import { SKILLS, SKILL_BY_ID, STANCES, SLOTS, ITEMS, NODES, MONSTERS, AREAS, AREA_IDS, RECIPES, STATIONS, SHOP_BUY, BAG_SLOTS, TIERS, XP_RATE, WEAPON_KINDS, TIER_BAR, OFFLINE, nodeYields, burnChance, isFood, isStackable, PRAYERS, BONE_XP, BONES } from './data.js';
 import { levelProgress, xpForLevel } from './xp.js';
-import { RARITIES, rarityOf, modText, rollCost, enchantCategory, isEnchantable, PITY_EPIC } from './enchant.js';
+import { RARITIES, rarityOf, modText, rollCost, enchantCategory, isEnchantable, PITY_EPIC, gemText, canCombineGems } from './enchant.js';
 import { heroHitChance, weaponKind } from './combat.js';
 import { iconURL, tabIcon } from './art.js';
 import { $, el, esc, fmt, setText } from './dom.js';
@@ -192,8 +192,8 @@ export class UI {
   r_bag(b) {
     const g = this.g, m = this.mode;
     if (m.shop) return this.r_shop(b);
-    const cellHtml = (id, n, e) => `${img(id)}${n > 1 ? `<b>${fmt(n)}</b>` : ''}${e ? `<i class="gem" style="background:${rarityOf(e).color}"></i>` : ''}`;
-    const cell = (id, n, e, onTap, idx) => { const c = el('button', 'cell' + (e ? ' ench' : ''), cellHtml(id, n, e)); c.title = itemName(id); c.dataset.item = id; if (idx != null) c.dataset.idx = idx; if (e) c.style.borderColor = rarityOf(e).color; c.onclick = onTap; return c; };
+    const cellHtml = (id, n, e, gem) => `${img(id)}${n > 1 ? `<b>${fmt(n)}</b>` : ''}${e ? `<i class="gem" style="background:${rarityOf(e).color}"></i>` : ''}${gem ? `<i class="gem" style="background:${RARITIES[gem.r].color}"></i>` : ''}`;
+    const cell = (id, n, e, onTap, idx, gem) => { const c = el('button', 'cell' + (e || gem ? ' ench' : ''), cellHtml(id, n, e, gem)); c.title = itemName(id); c.dataset.item = id; if (idx != null) c.dataset.idx = idx; if (e) c.style.borderColor = rarityOf(e).color; else if (gem) c.style.borderColor = RARITIES[gem.r].color; c.onclick = onTap; return c; };
     const bag = g.data.bag;
     if (m.bank) {
       b.appendChild(el('p', 'note', 'Tap a bag item to deposit it, tap a banked item to withdraw.'));
@@ -214,7 +214,7 @@ export class UI {
     for (let i = 0; i < BAG_SLOTS; i++) {
       const s = bag[i];
       if (!s) { gr.appendChild(el('button', 'cell empty', '')); continue; }
-      gr.appendChild(cell(s.id, s.n, s.e, () => this.itemInfo(s.id, i), i));
+      gr.appendChild(cell(s.id, s.n, s.e, () => this.itemInfo(s.id, i), i, s.gem));
     }
     b.appendChild(gr);
     b.appendChild(el('p', 'note', 'Tap an item to inspect, compare or equip it. Bank chest, altar and store are in Starter Meadow.'));
@@ -234,8 +234,11 @@ export class UI {
     else if (it.heal) extra = `Heals ${it.heal} HP · worth ${g.sellValue(id)} coins`;
     else extra = `Worth ${g.sellValue(id)} coins`;
     const canBury = !!BONE_XP[id];
+    const isGem = id === 'enchant_gem';
+    const gem = isGem && idx >= 0 ? g.data.bag[idx]?.gem : null;
     const ench = e ? `<div class="enchBox" style="border-color:${rc.color}"><b style="color:${rc.color}">${rc.name} enchant</b>${e.mods.map((m) => `<div>${modText(m)}</div>`).join('')}</div>` : '';
-    const c = this.modal(`<h3${rc ? ` style="color:${rc.color}"` : ''}>${img(id)} ${esc(it.name)}</h3><p class="note">${extra}</p>${ench}<div class="btns">${it.slot ? '<button class="btn gold" id="mEq" style="flex:1">Equip</button>' : ''}${it.heal ? '<button class="btn gold" id="mEat" style="flex:1">Eat</button>' : ''}${canBury ? '<button class="btn gold" id="mBury" style="flex:1">Bury</button>' : ''}${isEnchantable(id) ? '<button class="btn" id="mEn" style="flex:1">Enchant</button>' : ''}<button class="btn" id="mX" style="flex:1">Close</button></div>`);
+    const gemInfo = gem ? `<div class="enchBox" style="border-color:${RARITIES[gem.r].color}"><b style="color:${RARITIES[gem.r].color}">${gemText(gem)}</b></div>` : '';
+    const c = this.modal(`<h3${rc ? ` style="color:${rc.color}"` : ''}>${img(id)} ${esc(it.name)}</h3><p class="note">${extra}</p>${ench}${gemInfo}<div class="btns">${it.slot ? '<button class="btn gold" id="mEq" style="flex:1">Equip</button>' : ''}${it.heal ? '<button class="btn gold" id="mEat" style="flex:1">Eat</button>' : ''}${canBury ? '<button class="btn gold" id="mBury" style="flex:1">Bury</button>' : ''}${e ? '<button class="btn" id="mExtract" style="flex:1">Extract gem</button>' : ''}${isGem && gem ? '<button class="btn gold" id="mApply" style="flex:1">Apply</button><button class="btn" id="mCombine" style="flex:1">Combine</button>' : ''}${isEnchantable(id) ? '<button class="btn" id="mEn" style="flex:1">Enchant</button>' : ''}<button class="btn" id="mX" style="flex:1">Close</button></div>`);
     c.querySelector('#mX').onclick = () => this.closeModal();
     const eat = c.querySelector('#mEat');
     if (eat) eat.onclick = () => { g.eat(id); this.closeModal(); };
@@ -245,6 +248,42 @@ export class UI {
     if (en) en.onclick = () => { this.altar = { loc: { where: 'bag', idx }, cand: null, lock: -1 }; this.open('altar'); };
     const eq = c.querySelector('#mEq');
     if (eq) { eq.disabled = !g.canEquip(id).ok; eq.onclick = () => { g.equip(id, idx); this.closeModal(); }; }
+    const extract = c.querySelector('#mExtract');
+    if (extract) extract.onclick = () => this.extractPrompt(idx);
+    const apply = c.querySelector('#mApply');
+    if (apply) apply.onclick = () => this.applyGemPrompt(idx);
+    const combine = c.querySelector('#mCombine');
+    if (combine) combine.onclick = () => this.combineGemPrompt(idx);
+  }
+  /** pick which mod to extract into a gem (destroys the item) */
+  extractPrompt(idx) {
+    const g = this.g, s = g.data.bag[idx], e = s?.e;
+    if (!e) return;
+    const c = this.modal(`<h3>Extract enchantment</h3><p class="note">The item will be destroyed. Choose a modifier to turn into a gem:</p>${e.mods.map((m, i) => `<button class="btn" data-m="${i}" style="width:100%;margin:4px 0">${modText(m)}</button>`).join('')}<button class="btn" id="mX" style="width:100%;margin-top:8px">Cancel</button>`);
+    c.querySelectorAll('[data-m]').forEach((x) => { x.onclick = () => { g.extractGem({ where: 'bag', idx }, Number(x.dataset.m)); this.closeModal(); }; });
+    c.querySelector('#mX').onclick = () => this.closeModal();
+  }
+  /** choose another matching gem to combine with */
+  combineGemPrompt(gemIdx) {
+    const g = this.g, gem = g.data.bag[gemIdx]?.gem;
+    if (!gem) return;
+    const matches = [];
+    g.data.bag.forEach((s, i) => { if (i !== gemIdx && s.id === 'enchant_gem' && s.gem && canCombineGems(gem, s.gem)) matches.push(i); });
+    if (!matches.length) { this.toast('No matching gems to combine'); return; }
+    const c = this.modal(`<h3>Combine gems</h3><p class="note">${gemText(gem)}</p>${matches.map((i) => `<button class="btn" data-i="${i}" style="width:100%;margin:4px 0">${gemText(g.data.bag[i].gem)}</button>`).join('')}<button class="btn" id="mX" style="width:100%;margin-top:8px">Cancel</button>`);
+    c.querySelectorAll('[data-i]').forEach((x) => { x.onclick = () => { g.combineGems(gemIdx, Number(x.dataset.i)); this.closeModal(); }; });
+    c.querySelector('#mX').onclick = () => this.closeModal();
+  }
+  applyGemPrompt(gemIdx) {
+    const g = this.g, gem = g.data.bag[gemIdx]?.gem;
+    if (!gem) return;
+    const targets = [];
+    g.data.bag.forEach((s, i) => { if (i !== gemIdx && isEnchantable(s.id)) targets.push({ where: 'bag', idx: i, id: s.id }); });
+    for (const slot of SLOTS) if (g.data.equip[slot.id] && isEnchantable(g.data.equip[slot.id])) targets.push({ where: 'equip', slot: slot.id, id: g.data.equip[slot.id] });
+    if (!targets.length) { this.toast('No compatible items'); return; }
+    const c = this.modal(`<h3>Apply gem</h3><p class="note">${gemText(gem)}</p>${targets.map((t, i) => `<button class="btn" data-t="${i}" style="width:100%;margin:4px 0">${esc(itemName(t.id))} ${t.where === 'equip' ? '(equipped)' : ''}</button>`).join('')}<button class="btn" id="mX" style="width:100%;margin-top:8px">Cancel</button>`);
+    c.querySelectorAll('[data-t]').forEach((x) => { x.onclick = () => { const t = targets[Number(x.dataset.t)]; g.applyGem(gemIdx, t); this.closeModal(); }; });
+    c.querySelector('#mX').onclick = () => this.closeModal();
   }
   itemPrompt(id, n, verb, fn) {
     const c = this.modal(`<h3>${img(id)} ${esc(itemName(id))} <small>x${n}</small></h3><div class="btns"><button class="btn" data-k="1" style="flex:1">${verb} 1</button>${n > 5 ? `<button class="btn" data-k="5" style="flex:1">${verb} 5</button>` : ''}<button class="btn gold" data-k="${n}" style="flex:1">${verb} all</button></div><div class="btns" style="margin-top:6px"><button class="btn" id="mX" style="flex:1">Cancel</button></div>`);
