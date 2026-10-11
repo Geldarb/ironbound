@@ -1,5 +1,5 @@
 // Game model: character state + the traversable-area simulation. No DOM here (the UI listens to `game.on`).
-import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood, stanceXp } from './data.js';
+import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood, stanceXp, PRAYERS, PRAYER_BY_ID, BONE_XP, BONES } from './data.js';
 import { levelForXp } from './xp.js';
 import { heroCombat, heroHitChance, monsterHitChance, combatLevel } from './combat.js';
 import { sumMods, rollEnchant, rollCost, nextPity, enchantCategory } from './enchant.js';
@@ -21,8 +21,11 @@ export class Game {
     this.ents = [];
     this.regenT = 0;
     this.eatCd = 0;
+    this.prayerDrainT = 0;
     const d = this.data;
     d.equipEnch ||= {}; d.bankGear ||= []; d.visitedAreas ||= { meadow: true }; d.ep ??= 0; d.pity ??= 0;
+    d.prayerPoints ??= this.maxPrayer;
+    d.activePrayers ||= [];
     this.data.area = AREAS[this.data.area] ? this.data.area : 'meadow';
     this.enterArea(this.data.area, AREAS[this.data.area].spawn, true);
     this.data.hp = Math.min(this.data.hp || this.maxHp, this.maxHp);
@@ -35,6 +38,8 @@ export class Game {
   level(skill) { return levelForXp(this.data.xp[skill] || 0); }
   get levels() { return Object.fromEntries(SKILL_IDS.map((s) => [s, this.level(s)])); }
   get maxHp() { return this.level('hitpoints'); }
+  get maxPrayer() { return Math.max(1, this.level('prayer')); }
+  get prayerPoints() { return this.data.prayerPoints || 0; }
   get combatLevel() { return combatLevel(this.levels); }
   gain(skill, amount) {
     if (amount <= 0) return;
@@ -45,6 +50,7 @@ export class Game {
     const after = this.level(skill);
     if (after > before) {
       if (skill === 'hitpoints') this.data.hp = Math.min(this.maxHp, this.data.hp + (after - before));
+      if (skill === 'prayer') this.data.prayerPoints = Math.min(this.maxPrayer, (this.data.prayerPoints || 0) + (after - before));
       this.emit('level', { skill, level: after });
       for (let l = before + 1; l <= after; l++) this.addEp(l % 10 === 0 ? 5 : 1, `${skill} ${l}`);
     }
@@ -118,6 +124,65 @@ export class Game {
     return true;
   }
   eatBest() { const f = this.bestFood(); return f ? this.eat(f.id) : false; }
+
+  // ---- prayer
+  /** bury one set of bones for Prayer XP (anywhere) */
+  bury(id = 'bones') {
+    const b = BONES[id];
+    if (!b || this.count(id) < 1) return false;
+    this.removeItem(id, 1);
+    this.gain('prayer', b.xp);
+    this.data.prayerPoints = Math.min(this.maxPrayer, (this.data.prayerPoints || 0) + 1);
+    this.toast(`Buried ${b.name} (+${b.xp} Prayer)`);
+    this.emit('change');
+    return true;
+  }
+  /** restore prayer points to full at the prayer altar */
+  restorePrayer() {
+    const max = this.maxPrayer;
+    if (this.prayerPoints >= max) { this.toast('Prayer points already full'); return false; }
+    this.data.prayerPoints = max;
+    this.toast('Prayer points restored');
+    this.emit('change');
+    return true;
+  }
+  /** bury at the prayer altar for bonus XP + chance of Enchant Points */
+  buryAtAltar(id = 'bones', n = 1) {
+    const b = BONES[id];
+    if (!b || this.count(id) < n) return false;
+    this.removeItem(id, n);
+    const xp = b.altarXp * n;
+    this.gain('prayer', xp);
+    this.data.prayerPoints = Math.min(this.maxPrayer, (this.data.prayerPoints || 0) + n);
+    let ep = 0;
+    for (let i = 0; i < n; i++) {
+      if (b.epFlat) ep += b.epFlat;
+      if (this.rng() < b.epChance) ep += 1;
+    }
+    if (ep > 0) this.addEp(ep, 'prayer altar');
+    this.toast(`Offered ${n} ${b.name} (+${xp} Prayer${ep ? `, +${ep} EP` : ''})`);
+    this.emit('change');
+    return true;
+  }
+  togglePrayer(id) {
+    const p = PRAYER_BY_ID[id];
+    if (!p) return false;
+    if (this.level('prayer') < p.level) { this.toast(`Need Prayer ${p.level}`); return false; }
+    const list = this.data.activePrayers;
+    const i = list.indexOf(id);
+    if (i >= 0) { list.splice(i, 1); this.toast(`${p.name} deactivated`); }
+    else {
+      if (this.prayerPoints < 1) { this.toast('No prayer points'); return false; }
+      list.push(id);
+      this.toast(`${p.name} activated`);
+    }
+    this.emit('change');
+    return true;
+  }
+  /** total drain rate of currently active prayers (points per second) */
+  get prayerDrain() {
+    return this.data.activePrayers.reduce((a, id) => a + (PRAYER_BY_ID[id]?.drain || 0), 0);
+  }
   setAutoEat(on, pct) { if (on != null) this.data.autoEat.on = !!on; if (pct) this.data.autoEat.pct = pct; this.emit('change'); }
   tryAutoEat() {
     const a = this.data.autoEat;
@@ -355,6 +420,21 @@ export class Game {
       this.regenT += dt;
       if (this.regenT >= REGEN_EVERY / (1 + this.mods.regen)) { this.regenT = 0; this.data.hp = Math.min(this.maxHp, this.data.hp + 1); this.emit('hp'); }
     } else if (engaged) this.regenT = 0;
+
+    // prayer point drain
+    if (this.data.activePrayers.length && this.prayerPoints > 0) {
+      this.prayerDrainT += dt * this.prayerDrain;
+      if (this.prayerDrainT >= 1) {
+        const drain = Math.floor(this.prayerDrainT);
+        this.prayerDrainT -= drain;
+        this.data.prayerPoints = Math.max(0, this.prayerPoints - drain);
+        if (this.prayerPoints <= 0) {
+          this.data.activePrayers = [];
+          this.toast('Prayer points depleted');
+        }
+        this.emit('change');
+      }
+    } else this.prayerDrainT = 0;
   }
 
   fight(m, dt) {
