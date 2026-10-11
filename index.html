@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#1c1626">
+<link rel="icon" href="data:,">
+<title>Ironbound</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="hud">
+      <div class="pill" id="hudName"><b id="hudNameT">Hero</b><span id="hudCb">Cmb 3</span></div>
+      <div class="pill hp" id="hudHp"><i id="hudHpFill"></i><span id="hudHpT">10/10</span></div>
+      <div class="pill coins" id="hudCoins">🪙 <span id="hudCoinsT">0</span></div>
+      <button class="icoBtn" id="btnFull" aria-label="Fullscreen">⛶</button>
+      <button class="icoBtn" id="btnMenu" aria-label="Settings">⚙</button>
+    </div>
+    <div id="target"></div>
+    <div id="toasts"></div>
+  </div>
+  <div id="bottom">
+    <div id="stanceRow" role="group" aria-label="Combat style"></div>
+    <nav id="nav"></nav>
+  </div>
+  <section id="sheet" hidden>
+    <header><h2 id="sheetTitle"></h2><button class="close" id="sheetClose" aria-label="Close">✕</button></header>
+    <div id="sheetBody"></div>
+  </section>
+  <div id="modal" hidden><div class="card" id="modalCard"></div></div>
+  <div id="create" hidden>
+    <div class="card">
+      <h1>Ironbound</h1>
+      <p class="sub">Create your adventurer</p>
+      <canvas id="preview" width="160" height="170"></canvas>
+      <div id="looks"></div>
+      <label for="nameIn">Name</label>
+      <input id="nameIn" maxlength="14" placeholder="Your name" autocomplete="off" value="">
+      <button class="big" id="beginBtn">Begin adventure</button>
+    </div>
+  </div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

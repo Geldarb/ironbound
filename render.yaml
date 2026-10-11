@@ -1,0 +1,13 @@
+# Render blueprint: Ironbound as a Node web service.
+services:
+  - type: web
+    name: ironbound
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
