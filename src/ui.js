@@ -227,6 +227,10 @@ export class UI {
       c.querySelector('#mX').onclick = () => this.closeModal(); c.querySelector('#mY').onclick = () => { this.closeModal(); this.onReset(); };
     };
     b.appendChild(r);
+    const zr = el('div', 'row', `<div class="tx"><b>Zoom</b><small id="zoomT"></small></div><div class="btns"><button class="btn sm" id="zOut" aria-label="Zoom out">-</button><button class="btn sm" id="zIn" aria-label="Zoom in">+</button></div>`);
+    const sc = window.__ib?.scene, upd = () => { zr.querySelector('#zoomT').textContent = `${Math.round(sc.zoom * 100)}% (smaller = see more of the area)`; };
+    if (sc) { upd(); zr.querySelector('#zOut').onclick = () => { sc.setZoom(sc.zoom - 0.1); upd(); }; zr.querySelector('#zIn').onclick = () => { sc.setZoom(sc.zoom + 0.1); upd(); }; }
+    b.appendChild(zr);
     b.appendChild(el('p', 'note', 'Ironbound demo v0.1 · progress is saved in this browser.'));
   }
 }

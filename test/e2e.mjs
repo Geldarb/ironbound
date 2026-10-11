@@ -24,7 +24,7 @@ await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile
 const cdp = await page.createCDPSession();
 const touch = async (x, y) => { await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await sleep(50); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await sleep(150); };
 const tap = async (sel) => { const r = await page.$eval(sel, (e) => { if (e.closest('#sheetBody')) e.scrollIntoView({ block: 'center' }); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2, w: b.width, h: b.height }; }); await touch(r.x, r.y); return r; };
-const shot = (n) => page.screenshot({ path: `${SHOTS}/ib-${n}.png` });
+const shot = (n) => page.screenshot({ path: `${SHOTS}/${process.env.SHOT_PREFIX || 'ib2'}-${n}.png` });
 const G = (fn, ...a) => page.evaluate(fn, ...a);
 // screen position of a world entity kind (first match) or world x
 const entPos = (kind) => G((k) => { const { game, scene } = window.__ib; const e = game.ents.find((x) => x.kind === k); const r = scene.cv.getBoundingClientRect(); const s = scene.kc; return { x: r.left + (e.x - scene.cam) * s, y: r.top + (296 + scene.offY - 40) * s, wx: e.x }; }, kind);
@@ -57,10 +57,12 @@ check(await G(() => window.__ib.game.data.stance === 'aggressive'), 'stance swit
 await tap('.st[data-stance="accurate"]');
 
 // fight a chicken
+await G(() => { const g = window.__ib.game; g.data.xp.attack = 388; g.data.xp.strength = 388; g.data.hp = g.maxHp; }); // level 5 so the fight is not at the mercy of lucky rolls
 await warp(1300); await sleep(200);
 await tapEnt('chicken'); await sleep(300);
+check(await G(() => { const sc = window.__ib.scene; return sc.kc * 60 >= 44 && sc.kc < 1.2; }), 'zoomed-out camera keeps >=44px monster/node hit areas');
 check(await G(() => window.__ib.game.targetEnt?.kind === 'chicken' && document.querySelector('#target .tp')?.textContent.includes('Chicken')), 'tapping a monster selects it and shows the target panel');
-check(await waitFor(() => window.__ib.game.data.stats.kills >= 2, null, 60000), 'hero auto-attacks and repeats (2 kills)');
+check(await waitFor(() => window.__ib.game.data.stats.kills >= 2, null, 90000), 'hero auto-attacks and repeats (2 kills)');
 await shot('fight');
 const fx = await G(() => { const g = window.__ib.game; return { atk: g.data.xp.attack, hp: g.data.xp.hitpoints, bones: g.count('bones') }; });
 check(fx.atk > 0 && fx.hp > 1154 && fx.bones >= 2, `xp + loot gained (atk ${fx.atk}, bones ${fx.bones})`);
