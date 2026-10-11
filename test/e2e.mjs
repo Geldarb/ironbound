@@ -134,10 +134,15 @@ check(await G(() => window.__ib.game.data.hp > 3), 'tapping the food chip eats a
 // offline progress: mine, then pretend the tab was closed for an hour
 await warpTo('copper', -100); await sleep(150); await tapEnt('copper'); await sleep(500);
 const ore0 = await G(() => window.__ib.game.count('copper_ore'));
+const epBefore = await G(() => window.__ib.game.data.ep);
 await G(() => { window.__ibFreeze = true; const g = window.__ib.game; g.snapshot(Date.now() - 3600 * 1000); localStorage.setItem('ironbound-save-v1', JSON.stringify(g.data)); });
 await page.reload({ waitUntil: 'load' }); await sleep(800);
 check(await G(() => !document.getElementById('modal').hidden && !!document.querySelector('#modalCard .welcome')), 'reload after 1h away shows the Welcome back popup');
 check(await G((n) => window.__ib.game.count('copper_ore') > n + 20 && /Mining/.test(document.querySelector('#modalCard').textContent) && /1h/.test(document.querySelector('#modalCard').textContent), ore0), 'offline mining credited ore + xp in the summary');
+const epLine = await G(() => { const l = document.querySelector('#modalCard .welcome [data-ep]'); return l ? Number(l.querySelector('b').textContent.replace(/[^0-9]/g, '')) : null; });
+check(epLine > 0 && await G((a) => window.__ib.game.data.ep === a[0] + a[1] && document.getElementById('hudEpT').textContent === String(Math.floor(window.__ib.game.data.ep)), [epBefore, epLine]), `Welcome back lists "Enchant Points +${epLine}" and the HUD EP counter matches`);
+check(await G(() => JSON.parse(localStorage.getItem('ironbound-save-v1')).ep === window.__ib.game.data.ep), 'offline EP is saved');
+await page.screenshot({ path: `${SHOTS}/ib5-welcome-ep.png` });
 await shot('welcome');
 await tap('#modalCard #mX');
 check(await G(() => document.getElementById('modal').hidden && window.__ib.game.targetEnt?.kind === 'copper'), 'popup closes and the hero resumes the target');

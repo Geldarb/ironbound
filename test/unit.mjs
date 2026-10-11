@@ -261,6 +261,36 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   const b = new Game(migrate(JSON.parse(JSON.stringify(a.data))), mulberry32(1));
   check(b.data.activity?.kind === 'tree' && b.data.lastSeen === 5 && b.resumeActivity() && b.targetEnt.kind === 'tree', 'activity persists and resumes');
 }
+// --- Enchant Points while away
+{
+  const strong = (kind, area, seed = 7) => { const w = mk(seed); w.enterArea(area, 1000); for (const k of ['attack', 'strength', 'defence', 'hitpoints']) w.data.xp[k] = xpForLevel(70); w.data.hp = w.maxHp; w.data.equip.weapon = 'iron_scimitar'; w.data.bag.push({ id: 'lobster', n: 500 }); w.data.autoEat.on = true; w.select(w.ents.find((e) => e.kind === kind).id); w.snapshot(1000); return w; };
+  const levelEp = (before, after) => { let t = 0; for (const k of Object.keys(before)) for (let l = before[k] + 1; l <= after[k]; l++) t += l % 10 === 0 ? 5 : 1; return t; };
+  // wolves: per-kill chance (12%) over the simulated (50% pace) kills + level-ups
+  const w = strong('wolf', 'quarry'), lv0 = w.levels, ep0 = w.data.ep;
+  const r = simulateOffline(w, 7200, { rng: mulberry32(11) });
+  check(r.kills > 10 && r.epKills >= Math.floor(r.kills * 0.12) && r.epKills <= Math.ceil(r.kills * 0.12), `offline kill EP follows the per-kill chance (${r.epKills} EP for ${r.kills} kills)`);
+  check(r.epLevels === levelEp(lv0, w.levels) && r.epLevels > 0, `level-ups offline grant the level-up EP (${r.epLevels})`);
+  check(r.ep === r.epKills + r.epLevels && w.data.ep === ep0 + r.ep, 'report total = kill EP + level EP and is applied to the character');
+  // determinism: same seed, same grant
+  const w2 = strong('wolf', 'quarry'), r2 = simulateOffline(w2, 7200, { rng: mulberry32(11) });
+  check(r2.ep === r.ep && w2.data.ep === w.data.ep, 'EP grant is deterministic for a seed');
+  // efficiency: full pace roughly doubles the chance-based EP; zero kills => zero kill EP
+  const full = strong('wolf', 'quarry'), rf = simulateOffline(full, 7200, { rng: mulberry32(11), efficiency: 1 });
+  check(rf.epKills > r.epKills * 1.6, `50% offline efficiency halves chance-based EP (${r.epKills} vs ${rf.epKills} at 100%)`);
+  // boss: flat 8 EP per kill, no double counting
+  const b = strong('alpha_wolf', 'quarry', 5), rb = simulateOffline(b, 3 * 3600, { rng: mulberry32(2) });
+  check(rb.kills >= 1 && rb.epKills === rb.kills * 8, `boss kills grant 8 EP each offline (${rb.kills} kills, ${rb.epKills} EP)`);
+  // chickens: tiny chance, never negative, and gathering gives only level-up EP
+  const c = strong('chicken', 'meadow'), rc = simulateOffline(c, 3600, { rng: mulberry32(3) });
+  check(rc.epKills <= Math.ceil(rc.kills * 0.03) && rc.ep >= 0, 'chicken EP chance is small');
+  const m = mk(9); m.enterArea('meadow', 1000); m.data.xp.mining = xpForLevel(10) - 30; m.select(m.ents.find((e) => e.kind === 'copper').id); m.snapshot(1000);
+  const ep1 = m.data.ep, rm = simulateOffline(m, 3600, { rng: mulberry32(4) });
+  check(rm.catches > 0 && rm.epKills === 0 && m.level('mining') >= 10 && rm.epLevels >= 5 && m.data.ep === ep1 + rm.ep, `gathering offline: level 10 gives +5 EP rule (${rm.epLevels} EP from levels)`);
+  check(simulateOffline(mk(), 30).ep === 0, 'no EP when away under the minimum');
+  // persistence
+  const back = migrate(JSON.parse(JSON.stringify(w.data)));
+  check(back.ep === w.data.ep && new Game(back).ep === w.data.ep, 'offline EP persists in the save');
+}
 // --- migration keeps levels
 {
   const old = { v: 1, name: 'Old', xp: { attack: 5000, strength: 2000, defence: 300, hitpoints: 3000, mining: 900, smithing: 100, woodcutting: 40 }, bag: [{ id: 'hammer', n: 1 }] };

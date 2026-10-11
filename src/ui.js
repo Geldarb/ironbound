@@ -14,6 +14,7 @@ const cap = (s) => s[0].toUpperCase() + s.slice(1);
 const img = (id) => `<img alt="" src="${iconURL(id)}">`;
 const itemName = (id) => ITEMS[id]?.name || id;
 
+const hudNum = (n) => (n >= 10000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, '')}k` : fmt(n));
 export class UI {
   constructor(game, onReset) {
     this.g = game; this.onReset = onReset; this.sheet = null; this.mode = {}; this.dirty = true; this.acc = 0;
@@ -77,7 +78,7 @@ export class UI {
     const ate = Object.entries(rep.ate).map(([id, n]) => `${n} ${itemName(id).toLowerCase()}`).join(', ');
     const what = rep.activity.type === 'monster' ? `fighting ${rep.activity.name.toLowerCase()}s (${rep.kills} defeated)` : `${rep.activity.name.toLowerCase()} (${rep.catches} gathered)`;
     const c = this.modal(`<div class="welcome" data-welcome="1"><h3>Welcome back, ${esc(this.g.data.name)}!</h3><div class="note">Away for <b>${dur(rep.away)}</b>${rep.capped ? ` (capped at ${dur(rep.used)})` : ''}. Your hero kept ${what} at ${Math.round(OFFLINE.efficiency * 100)}% pace.${rep.stopped ? ` Stopped early: <b>${esc(rep.stopped)}</b>.` : ''}</div>
-      <div class="lines">${lv}${xp}${rep.coins ? `<div class="ln"><span>Coins</span><b>+${fmt(rep.coins)}</b></div>` : ''}${ate ? `<div class="ln"><span>Food eaten</span><b>${esc(ate)}</b></div>` : ''}</div>${items ? `<div class="items">${items}</div>` : ''}${rep.banked ? `<div class="note">${rep.banked} items did not fit in your bag and went to the bank.</div>` : ''}
+      <div class="lines">${lv}${xp}${rep.coins ? `<div class="ln"><span>Coins</span><b>+${fmt(rep.coins)}</b></div>` : ''}${rep.ep ? `<div class="ln" data-ep="1" style="color:#d9a6ff"><span>Enchant Points</span><b>+${fmt(rep.ep)}</b></div>` : ''}${ate ? `<div class="ln"><span>Food eaten</span><b>${esc(ate)}</b></div>` : ''}</div>${items ? `<div class="items">${items}</div>` : ''}${rep.banked ? `<div class="note">${rep.banked} items did not fit in your bag and went to the bank.</div>` : ''}
       <button class="btn gold" id="mX" style="width:100%">Continue</button></div>`);
     c.querySelector('#mX').onclick = () => this.closeModal();
   }
@@ -92,10 +93,10 @@ export class UI {
     const g = this.g, d = g.data;
     setText($('hudNameT'), d.name); setText($('hudCb'), `Cmb ${g.combatLevel}`);
     setText($('hudHpT'), `${d.hp}/${g.maxHp}`); const w = `${Math.round((d.hp / g.maxHp) * 100)}%`; if ($('hudHpFill')._w !== w) { $('hudHpFill')._w = w; $('hudHpFill').style.width = w; }
-    setText($('hudCoinsT'), fmt(d.coins));
+    setText($('hudCoinsT'), hudNum(d.coins)); setText($('hudEpT'), hudNum(Math.floor(d.ep)));
     if (this.stanceSig !== (d.equip.weapon || '')) this.buildStance();
     for (const b of $('stanceRow').children) b.classList.toggle('on', b.dataset.stance === g.stance);
-    const fc = g.foodCount, chip = $('hudFood'); setText($('hudFoodT'), d.autoEat.on ? `${fc} · ${d.autoEat.pct}%` : String(fc));
+    const fc = g.foodCount, chip = $('hudFood'); setText($('hudFoodT'), String(fc)); setText($('hudFoodP'), d.autoEat.on ? ` · ${d.autoEat.pct}%` : '');
     chip.classList.toggle('auto', d.autoEat.on && fc > 0); chip.classList.toggle('empty', fc === 0);
   }
   updateTarget() {

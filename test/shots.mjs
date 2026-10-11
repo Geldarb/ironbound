@@ -38,6 +38,8 @@ if (MODE === 'layout') {
     await page.setViewport({ width: w, height: h, deviceScaleFactor: 2, isMobile: true, hasTouch: true }); await sleep(500);
     await shot(`layout-${n}`);
     const lay = await G(() => ({ navFits: document.getElementById('nav').getBoundingClientRect().right <= innerWidth + 0.5, minBtn: Math.min(...[...document.querySelectorAll('#nav button,.st')].map((b) => b.getBoundingClientRect().height)), stage: document.getElementById('stage').getBoundingClientRect().height / innerHeight }));
+    await G(() => { window.__ib.game.data.ep = 1234; window.__ib.game.data.coins = 12345; }); await sleep(300);
+    lay.hudDbg = await G(() => [...document.getElementById('hud').children].map((c) => Math.round(c.getBoundingClientRect().right))); lay.hudFits = await G(() => { const r = document.getElementById('hud').getBoundingClientRect(); return [...document.getElementById('hud').children].every((c) => c.getBoundingClientRect().right <= innerWidth + 0.5) && r.right <= innerWidth + 0.5; }); await sleep(300);
     console.log(n, JSON.stringify(lay));
     await tap('#nav [data-tab="gear"]'); await sleep(300); await shot(`layout-${n}-gear`); await G(() => window.__ib.ui.close());
   }

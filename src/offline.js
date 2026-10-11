@@ -13,14 +13,14 @@ export function simulateOffline(game, awaySeconds, opts = {}) {
   const cap = (opts.capHours ?? OFFLINE.capHours) * 3600;
   const minAway = opts.minAway ?? OFFLINE.minAway;
   const used = Math.min(awaySeconds, cap);
-  const rep = { away: awaySeconds, used, capped: awaySeconds > cap, simulated: false, activity: null, kills: 0, catches: 0, ep: 0, xp: {}, levels: [], items: {}, coins: 0, ate: {}, banked: 0, stopped: null };
+  const rep = { away: awaySeconds, used, capped: awaySeconds > cap, simulated: false, activity: null, kills: 0, catches: 0, ep: 0, epKills: 0, epLevels: 0, xp: {}, levels: [], items: {}, coins: 0, ate: {}, banked: 0, stopped: null };
   const act = game.data.activity;
   if (!act || awaySeconds < minAway) return rep;
   const kind = act.type === 'monster' ? MONSTERS[act.kind] : NODES[act.kind];
   if (!kind) return rep;
   rep.activity = { type: act.type, kind: act.kind, name: kind.name, area: act.area };
 
-  const d = game.data, xp0 = { ...d.xp }, lv0 = game.levels;
+  const d = game.data, xp0 = { ...d.xp }, lv0 = game.levels, ep0 = d.ep;
   const saved = game.listeners; game.listeners = []; // silent: no toasts / floaters while catching up
   const give = (id, n) => {
     if (n <= 0) return;
@@ -72,8 +72,10 @@ export function simulateOffline(game, awaySeconds, opts = {}) {
           give(dr.id, stochastic(Math.min(1, dr.p * (1 + hc.mods.drop)) * avg * kills));
         }
         d.stats.kills += kills; rep.kills += kills;
+        // Enchant Points: the same per-kill sources as online (boss flat EP + per-kill chance). `kills` is already the 50%-pace
+        // count, so the chance-based part carries the offline efficiency without being reduced twice.
         const ep = stochastic(kills * ((m.epFlat || 0) + (m.epChance || 0)));
-        if (ep > 0) { game.addEp(ep, 'offline'); rep.ep += ep; }
+        if (ep > 0) { game.addEp(ep, 'offline'); rep.epKills += ep; }
         remaining -= kills * cycle;
       } else {
         const n = kind, tool = game.bestTool(n.tool);
@@ -101,6 +103,8 @@ export function simulateOffline(game, awaySeconds, opts = {}) {
     const l1 = game.level(s);
     if (l1 > lv0[s]) rep.levels.push({ skill: s, from: lv0[s], to: l1 });
   }
+  // total EP gained = kill EP above + the level-up rule applied by game.gain (+1 per level, +5 on every 10th)
+  rep.ep = d.ep - ep0; rep.epLevels = rep.ep - rep.epKills;
   rep.simulated = rep.kills > 0 || rep.catches > 0;
   return rep;
 }

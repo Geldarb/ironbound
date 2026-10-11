@@ -123,3 +123,6 @@ html,body{background:var(--bg)}
 input{background:#15110b;border:2px solid var(--trim)}
 .tp .bar{background:#8a1c14}.tp .bar i{background:#1fb62b}
 .close{font-weight:800;color:var(--gold)}
+.pill.ep{color:#d9a6ff;padding:5px 7px;gap:3px;font-size:13px}.pill.coins{padding:5px 7px;gap:3px}
+@media (max-width:400px){#hud{gap:4px;left:4px;right:4px}.pill{padding:4px 6px;font-size:12px;gap:3px}.pill.hp{min-width:30px}#hudName b{max-width:46px}#hudCb{font-size:10px}.pill.food,.pill.ep,.pill.coins{padding:4px 5px;gap:2px;font-size:12px}}
+@media (max-width:400px){#hudFoodP{display:none}}
