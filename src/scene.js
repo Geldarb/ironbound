@@ -146,7 +146,7 @@ export class Scene {
     for (const e of sorted) {
       if (e.x < this.cam - 120 || e.x > this.cam + this.viewW + 120) continue;
       if (e.type === 'node') { const n = NODES[e.kind]; drawNode(ctx, e.kind, e.x, GROUND, 1.05, e.dead > 0, n.color, this.t, this.nodeHit[`${e.x}`] || 0); }
-      else if (e.type === 'station') { drawStation(ctx, e.kind, e.x, GROUND, 1.1, this.t); this.label(e.x, STATIONS[e.kind].name); }
+      else if (e.type === 'station') { drawStation(ctx, e.kind, e.x, GROUND, 1.1, this.t); this.label(e.x, STATIONS[e.kind].short || STATIONS[e.kind].name); }
       else if (e.type === 'sign') { drawSign(ctx, e.x, GROUND, 1, AREAS[e.kind].name.split(' ').pop(), this.t, e.x < AREAS[aid].width / 2); }
       else if (e.type === 'monster') {
         if (e.dead > 0) continue;

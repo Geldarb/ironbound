@@ -24,7 +24,7 @@ await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile
 const cdp = await page.createCDPSession();
 const touch = async (x, y) => { await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await sleep(50); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await sleep(150); };
 const tap = async (sel) => { const r = await page.$eval(sel, (e) => { if (e.closest('#sheetBody')) e.scrollIntoView({ block: 'center' }); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2, w: b.width, h: b.height }; }); await touch(r.x, r.y); return r; };
-const shot = (n) => page.screenshot({ path: `${SHOTS}/${process.env.SHOT_PREFIX || 'ib3'}-${n}.png` });
+const shot = (n) => page.screenshot({ path: `${SHOTS}/${process.env.SHOT_PREFIX || 'ib4e'}-${n}.png` });
 const G = (fn, ...a) => page.evaluate(fn, ...a);
 // screen position of a world entity kind (first match) or world x
 const entPos = (kind) => G((k) => { const { game, scene } = window.__ib; const e = game.ents.find((x) => x.kind === k); const r = scene.cv.getBoundingClientRect(); const s = scene.kc; return { x: r.left + (e.x - scene.cam) * s, y: r.top + (296 + scene.offY - 40) * s, wx: e.x }; }, kind);
@@ -141,6 +141,41 @@ check(await G((n) => window.__ib.game.count('copper_ore') > n + 20 && /Mining/.t
 await shot('welcome');
 await tap('#modalCard #mX');
 check(await G(() => document.getElementById('modal').hidden && window.__ib.game.targetEnt?.kind === 'copper'), 'popup closes and the hero resumes the target');
+// weapon types: stance row follows the weapon, 2h takes the shield slot
+await G(() => window.__ib.ui.close());
+await G(() => { const g = window.__ib.game, X = window.__ib.xpForLevel; g.data.xp.attack = X(30); g.data.xp.defence = X(30); g.data.xp.smithing = Math.max(g.data.xp.smithing, X(25)); for (const id of ['iron_scimitar', 'iron_2h', 'iron_shield']) g.addItem(id, 1); g.equip('iron_scimitar'); });
+await sleep(200);
+check(await G(() => document.querySelectorAll('#stanceRow .st').length === 4 && /Lunge/.test(document.getElementById('stanceRow').textContent)), 'scimitar stance row: Chop / Slash / Lunge / Block');
+await G(() => window.__ib.game.equip('bronze_dagger')); await sleep(200);
+check(await G(() => document.querySelectorAll('#stanceRow .st').length === 3), 'dagger stance row has 3 styles');
+await G(() => window.__ib.game.equip('iron_shield'));
+await tap('#nav [data-tab="bag"]'); await tap('.cell[data-item="iron_2h"]'); await shot('inspect-2h'); await tap('#mEq'); await sleep(250);
+check(await G(() => { const g = window.__ib.game; return g.data.equip.weapon === 'iron_2h' && g.data.equip.shield === null && g.count('iron_shield') === 1; }), 'equipping a 2h sword unequips the shield');
+check(await G(() => /Smash/.test(document.getElementById('stanceRow').textContent)), '2h stance row shows Smash');
+// smithing lists every weapon type per tier
+await G(() => window.__ib.ui.close()); await G(() => { const ui = window.__ib.ui; ui.craftMenu = 'anvil'; ui.smithTier = 0; window.__ib.game.data.visited.anvil = true; ui.open('craft'); }); await sleep(250);
+check(await G(() => document.querySelectorAll('[data-recipe]').length === 18 && !!document.querySelector('[data-recipe="bronze_halberd"]') && !!document.querySelector('[data-recipe="bronze_battleaxe"]')), 'anvil lists 18 bronze recipes (11 weapon types + armour + pickaxe)');
+await G(() => { const ui = window.__ib.ui; ui.smithTier = 3; ui.renderSheet(); }); await sleep(150);
+check(await G(() => document.querySelectorAll('[data-recipe]').length === 18 && /Mithril bar/.test(document.querySelector('[data-recipe="mithril_dagger"]').textContent)), 'tier chips switch to Mithril recipes');
+await shot('smithing-tiers');
+// enchanting altar: roll an enchant on the scimitar
+await G(() => window.__ib.ui.close());
+await tap('#nav [data-tab="gear"]'); await tap('#toAltar'); await sleep(250);
+const ep0 = await G(() => window.__ib.game.data.ep);
+await tap('[data-loc][data-item="iron_scimitar"] button'); await sleep(250);
+check(await G(() => !!document.querySelector('[data-altar-item="iron_scimitar"]')), 'altar shows the selected item');
+await tap('#rollBtn'); await sleep(300);
+const en = await G(() => { const g = window.__ib.game; const s = g.data.bag.find((x) => x.id === 'iron_scimitar'); return { ep: g.data.ep, e: s?.e }; });
+check(en.e && en.e.mods.length >= 1 && en.ep === ep0 - 10, 'first enchant roll costs 10 EP and applies a rarity + modifiers');
+await shot('altar-enchanted');
+await G(() => window.__ib.ui.close());
+await tap('#nav [data-tab="bag"]'); await sleep(200);
+check(await G(() => !!document.querySelector('.cell.ench[data-item="iron_scimitar"]')), 'enchanted gear gets a rarity border in the bag');
+await G(() => window.__ib.ui.close());
+// scene draw cost (software-rendered headless Chrome is a pessimistic proxy for a phone)
+const ms = await G(() => { const sc = window.__ib.scene; const t0 = performance.now(); for (let i = 0; i < 40; i++) sc.draw(performance.now() + i * 16); return (performance.now() - t0) / 40; });
+check(ms < 25, `scene draws in ${ms.toFixed(1)}ms/frame`);
+await G(() => { const g = window.__ib.game; g.equip('bronze_dagger'); g.data.xp.attack = 0; g.data.xp.defence = 0; });
 // map
 await G(() => window.__ib.ui.close()); await tap('#nav [data-tab="map"]'); await sleep(200);
 check(await G(() => document.querySelector('[data-area="quarry"]').disabled), 'Quarry locked below combat level 10');

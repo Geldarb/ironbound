@@ -174,8 +174,8 @@ export const STATIONS = {
   range: { name: 'Range', menu: 'Cooking', blurb: 'Cook raw food. A range burns less than a campfire.' },
   furnace: { name: 'Furnace', menu: 'Smelting', blurb: 'Smelt ore into bars.' },
   anvil: { name: 'Anvil', menu: 'Smithing', blurb: 'Hammer bars into gear. Needs a hammer.' },
-  altar: { name: 'Enchanting altar', menu: 'Enchanting', blurb: 'Spend Enchant Points to roll random enchantments.' },
-  bank: { name: 'Bank chest', menu: 'Bank' },
+  altar: { name: 'Enchanting altar', short: 'Altar', menu: 'Enchanting', blurb: 'Spend Enchant Points to roll random enchantments.' },
+  bank: { name: 'Bank chest', short: 'Bank', menu: 'Bank' },
   store: { name: 'General store', menu: 'Shop' },
 };
 

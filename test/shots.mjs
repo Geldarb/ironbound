@@ -32,5 +32,15 @@ export { page, G, tap, touch, shot, warpTo, select, setXp, give, sleep, errors, 
 const MODE = process.argv[2] || 'all';
 if (MODE === 'all' || MODE === 'tour') await (await import('./shots-tour.mjs')).default({ page, G, tap, touch, shot, warpTo, select, setXp, give, sleep });
 if (MODE === 'art') await (await import('./shots-art.mjs')).default({ page, G, tap, touch, shot });
+if (MODE === 'layout') {
+  await G(() => { const g = window.__ib.game; g.data.ep = 50; g.equip; });
+  for (const [w, h, n] of [[360, 640, 'small'], [844, 390, 'landscape']]) {
+    await page.setViewport({ width: w, height: h, deviceScaleFactor: 2, isMobile: true, hasTouch: true }); await sleep(500);
+    await shot(`layout-${n}`);
+    const lay = await G(() => ({ navFits: document.getElementById('nav').getBoundingClientRect().right <= innerWidth + 0.5, minBtn: Math.min(...[...document.querySelectorAll('#nav button,.st')].map((b) => b.getBoundingClientRect().height)), stage: document.getElementById('stage').getBoundingClientRect().height / innerHeight }));
+    console.log(n, JSON.stringify(lay));
+    await tap('#nav [data-tab="gear"]'); await sleep(300); await shot(`layout-${n}-gear`); await G(() => window.__ib.ui.close());
+  }
+}
 console.log(errors.length ? 'ERRORS: ' + errors.join(' | ') : 'no page errors');
 await browser.close(); srv.kill();
