@@ -378,13 +378,16 @@ export function drawStation(ctx, kind, x, y, s, t = 0) {
     rrect(ctx, -32, -52, 5, 52, 1, '#6a4524'); rrect(ctx, 27, -52, 5, 52, 1, '#6a4524');
     for (let i = 0; i < 6; i++) { poly(ctx, [[-36 + i * 12, -74], [-24 + i * 12, -74], [-25 + i * 12, -52], [-35 + i * 12, -52]], i % 2 ? '#fff' : '#d8453c'); }
     rrect(ctx, -32, -24, 64, 24, 2, '#a56a38'); rrect(ctx, -32, -24, 64, 4, 1, '#c78a52', null); circle(ctx, -13, -30, 6, '#d8453c'); circle(ctx, 4, -30, 6, '#f7c948'); circle(ctx, 19, -30, 6, '#6fbf4a');
-  } else if (kind === 'altar') {
+  } else if (kind === 'altar' || kind === 'prayer_altar') {
+    const isPrayer = kind === 'prayer_altar';
     const gl = 0.6 + Math.sin(t * 3) * 0.25;
+    const col = isPrayer ? '#c9a227' : '#b266ff';
+    const col2 = isPrayer ? '#ffe27a' : '#e0b8ff';
     rrect(ctx, -30, -12, 60, 12, 2, '#6f6b7a'); rrect(ctx, -22, -26, 44, 15, 2, '#8a8698'); rrect(ctx, -22, -26, 44, 4, 2, '#aaa6b8', null);
-    for (const [px] of [[-18], [18]]) { rrect(ctx, px - 3, -52, 6, 28, 1, '#6f6b7a'); circle(ctx, px, -54, 3.2, `rgba(190,120,255,${gl})`, null); }
-    ctx.fillStyle = `rgba(190,120,255,${gl})`; for (const rx of [-12, -4, 4, 12]) rrect(ctx, rx - 1.5, -22, 3, 7, 1, ctx.fillStyle, null);
-    const fy = -46 + Math.sin(t * 2) * 3; ctx.save(); ctx.translate(0, fy); ctx.rotate(t * 1.5); poly(ctx, [[0, -9], [6, 0], [0, 9], [-6, 0]], '#b266ff', OUT, 1.5); poly(ctx, [[0, -9], [6, 0], [0, 0]], '#e0b8ff', null); ctx.restore();
-    ctx.globalAlpha = 0.18; ellipse(ctx, 0, -40, 34, 30, '#b266ff', null); ctx.globalAlpha = 1;
+    for (const [px] of [[-18], [18]]) { rrect(ctx, px - 3, -52, 6, 28, 1, '#6f6b7a'); circle(ctx, px, -54, 3.2, `rgba(${isPrayer ? '201,162,39' : '190,120,255'},${gl})`, null); }
+    ctx.fillStyle = `rgba(${isPrayer ? '201,162,39' : '190,120,255'},${gl})`; for (const rx of [-12, -4, 4, 12]) rrect(ctx, rx - 1.5, -22, 3, 7, 1, ctx.fillStyle, null);
+    const fy = -46 + Math.sin(t * 2) * 3; ctx.save(); ctx.translate(0, fy); ctx.rotate(t * 1.5); poly(ctx, [[0, -9], [6, 0], [0, 9], [-6, 0]], col, OUT, 1.5); poly(ctx, [[0, -9], [6, 0], [0, 0]], col2, null); ctx.restore();
+    ctx.globalAlpha = 0.18; ellipse(ctx, 0, -40, 34, 30, col, null); ctx.globalAlpha = 1;
   }
   ctx.restore();
 }
