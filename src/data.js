@@ -21,10 +21,13 @@ export const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
 
 // ---- combat styles (melee). `bonus` = which effective level gets +3; `xp` = skills that get the 4 xp per damage.
 export const STANCES = [
-  { id: 'accurate', name: 'Accurate', short: 'Acc', bonus: 'attack', xp: ['attack'], blurb: '+3 effective Attack. Trains Attack.' },
-  { id: 'aggressive', name: 'Aggressive', short: 'Agg', bonus: 'strength', xp: ['strength'], blurb: '+3 effective Strength. Trains Strength.' },
-  { id: 'defensive', name: 'Defensive', short: 'Def', bonus: 'defence', xp: ['defence'], blurb: '+3 effective Defence. Trains Defence.' },
+  { id: 'accurate', name: 'Accurate', short: 'Acc', bonus: { attack: 3 }, xp: ['attack'], blurb: '+3 effective Attack. Trains Attack.' },
+  { id: 'aggressive', name: 'Aggressive', short: 'Agg', bonus: { strength: 3 }, xp: ['strength'], blurb: '+3 effective Strength. Trains Strength.' },
+  { id: 'controlled', name: 'Controlled', short: 'Ctl', bonus: { attack: 1, strength: 1, defence: 1 }, xp: ['attack', 'strength', 'defence'], blurb: '+1 to Attack, Strength and Defence. Shares XP between all three.' },
+  { id: 'defensive', name: 'Defensive', short: 'Def', bonus: { defence: 3 }, xp: ['defence'], blurb: '+3 effective Defence. Trains Defence.' },
 ];
+/** XP split for a stance: [[skill, share]] (4 xp per damage * share) */
+export const stanceXp = (id) => { const st = STANCES.find((x) => x.id === id) || STANCES[0]; return st.xp.map((k) => [k, 1 / st.xp.length]); };
 export const STANCE_BY_ID = Object.fromEntries(STANCES.map((s) => [s.id, s]));
 
 // ---- equipment tiers (RuneScape names). reqLevel is the Attack (weapons) / Defence (armour) level needed.
@@ -40,25 +43,46 @@ export const TIER_IDX = Object.fromEntries(TIERS.map((t, i) => [t.id, i]));
 
 export const SLOTS = [
   { id: 'head', name: 'Head' }, { id: 'body', name: 'Body' }, { id: 'legs', name: 'Legs' },
-  { id: 'weapon', name: 'Weapon' }, { id: 'shield', name: 'Shield' },
+  { id: 'weapon', name: 'Weapon' }, { id: 'shield', name: 'Shield' }, { id: 'gloves', name: 'Gloves' }, { id: 'boots', name: 'Boots' },
 ];
 export const SLOT_IDS = SLOTS.map((s) => s.id);
 
 // Demo pacing: attack intervals are shorter than RuneScape's 2.4s (a 'tick' is 0.3s here).
-// per-tier bonus tables (index = tier). Weapons: attack + strength bonus and attack interval (seconds).
-const SWORD = { atk: [4, 7, 11, 16, 22, 38], str: [5, 7, 11, 16, 22, 39] };
-const DAGGER = { atk: [4, 7, 11, 16, 22, 38], str: [3, 5, 8, 12, 17, 28] };
-const HELM = [3, 6, 9, 13, 18, 27], SHIELD = [5, 9, 13, 19, 26, 40], BODY = [10, 18, 25, 35, 48, 70], LEGS = [7, 12, 18, 26, 36, 52];
-export const GEAR_KINDS = {
-  dagger: { name: 'Dagger', slot: 'weapon', interval: 1.2, bars: 1, smithLevel: 1, xpBars: 1, art: 'dagger' },
-  sword: { name: 'Sword', slot: 'weapon', interval: 1.5, bars: 1, smithLevel: 4, art: 'sword' },
-  helm: { name: 'Med Helm', slot: 'head', bars: 1, smithLevel: 3, art: 'helm' },
-  shield: { name: 'Kiteshield', slot: 'shield', bars: 2, smithLevel: 8, art: 'shield' },
-  legs: { name: 'Platelegs', slot: 'legs', bars: 3, smithLevel: 16, art: 'legs' },
-  body: { name: 'Platebody', slot: 'body', bars: 5, smithLevel: 18, art: 'body' },
+// per-tier base tables (index = tier). Weapon stats = base * the kind's multipliers.
+const ATKB = [4, 7, 11, 16, 22, 38], STRB = [5, 7, 11, 16, 22, 39];
+const ARMOUR = { helm: [3, 6, 9, 13, 18, 27], shield: [5, 9, 13, 19, 26, 40], body: [10, 18, 25, 35, 48, 70], legs: [7, 12, 18, 26, 36, 52], boots: [2, 3, 5, 7, 10, 15], gloves: [2, 3, 5, 7, 10, 15] };
+export const DMG_TYPES = ['stab', 'slash', 'crush'];
+const S = (stance, name, type) => ({ stance, name, type });
+/** Weapon kinds. a = attack-bonus multipliers per damage type, str = strength multiplier, interval = seconds per swing,
+ *  two = two-handed (also takes the shield slot), reach = extra px of melee reach, styles = RS-like combat styles (name + damage type) per stance. */
+export const WEAPON_KINDS = {
+  dagger: { name: 'Dagger', interval: 1.2, bars: 1, lvl: 1, a: { stab: 1, slash: 0.55, crush: 0 }, str: 0.6, blurb: 'Fast, stab', styles: [S('accurate', 'Stab', 'stab'), S('aggressive', 'Slash', 'slash'), S('defensive', 'Block', 'stab')] },
+  sword: { name: 'Sword', interval: 1.5, bars: 1, lvl: 4, a: { stab: 0.9, slash: 1, crush: 0 }, str: 1, blurb: 'Balanced', styles: [S('accurate', 'Stab', 'stab'), S('aggressive', 'Slash', 'slash'), S('defensive', 'Block', 'slash')] },
+  scimitar: { name: 'Scimitar', interval: 1.2, bars: 2, lvl: 5, a: { stab: 0.3, slash: 1.25, crush: 0 }, str: 0.95, blurb: 'Fast, slash, best accuracy', styles: [S('accurate', 'Chop', 'slash'), S('aggressive', 'Slash', 'slash'), S('controlled', 'Lunge', 'stab'), S('defensive', 'Block', 'slash')] },
+  longsword: { name: 'Longsword', interval: 1.5, bars: 2, lvl: 6, a: { stab: 0.95, slash: 1.1, crush: 0 }, str: 1.15, blurb: 'Solid slash and stab', styles: [S('accurate', 'Chop', 'slash'), S('aggressive', 'Slash', 'slash'), S('controlled', 'Lunge', 'stab'), S('defensive', 'Block', 'slash')] },
+  mace: { name: 'Mace', interval: 1.5, bars: 1, lvl: 2, a: { stab: 0.3, slash: 0, crush: 1 }, str: 0.9, blurb: 'Crush', styles: [S('accurate', 'Pound', 'crush'), S('aggressive', 'Pummel', 'crush'), S('controlled', 'Spike', 'stab'), S('defensive', 'Block', 'crush')] },
+  warhammer: { name: 'Warhammer', interval: 1.8, bars: 3, lvl: 9, a: { stab: 0, slash: 0, crush: 1.1 }, str: 1.6, blurb: 'Slow, heavy crush', styles: [S('accurate', 'Pound', 'crush'), S('aggressive', 'Pummel', 'crush'), S('defensive', 'Block', 'crush')] },
+  axe: { name: 'Axe', interval: 1.5, bars: 1, lvl: 1, a: { stab: 0, slash: 1, crush: 0.7 }, str: 1.2, tool: 'axe', blurb: 'Slash, strong. Also chops trees', styles: [S('accurate', 'Chop', 'slash'), S('aggressive', 'Hack', 'slash'), S('controlled', 'Smash', 'crush'), S('defensive', 'Block', 'slash')] },
+  battleaxe: { name: 'Battleaxe', interval: 1.8, bars: 3, lvl: 10, a: { stab: 0, slash: 1.2, crush: 0.8 }, str: 1.65, blurb: 'Slow, strong slash', styles: [S('accurate', 'Chop', 'slash'), S('aggressive', 'Hack', 'slash'), S('controlled', 'Smash', 'crush'), S('defensive', 'Block', 'slash')] },
+  '2h': { name: '2h sword', interval: 2.1, bars: 3, lvl: 14, a: { stab: 0.8, slash: 1.4, crush: 0 }, str: 2, two: true, blurb: 'Slow, two-handed, huge hits', styles: [S('accurate', 'Chop', 'slash'), S('aggressive', 'Slash', 'slash'), S('controlled', 'Smash', 'crush'), S('defensive', 'Block', 'slash')] },
+  spear: { name: 'Spear', interval: 1.5, bars: 1, lvl: 7, a: { stab: 1, slash: 0.7, crush: 0.7 }, str: 1, reach: 18, blurb: 'Reach, controlled', styles: [S('controlled', 'Lunge', 'stab'), S('aggressive', 'Swipe', 'slash'), S('defensive', 'Block', 'stab')] },
+  halberd: { name: 'Halberd', interval: 2.1, bars: 2, lvl: 12, a: { stab: 1.2, slash: 1.1, crush: 0 }, str: 1.8, two: true, reach: 38, blurb: 'Long reach, two-handed', styles: [S('controlled', 'Jab', 'stab'), S('aggressive', 'Swipe', 'slash'), S('defensive', 'Fend', 'stab')] },
 };
-// smithing level needed per tier (bronze 1, iron 15, steel 30 ...), added to the kind's own level offset
+export const UNARMED = { name: 'Unarmed', interval: 1.5, a: { stab: 0, slash: 0, crush: 0 }, str: 0, blurb: 'Fists', styles: [S('accurate', 'Punch', 'crush'), S('aggressive', 'Kick', 'crush'), S('defensive', 'Block', 'crush')] };
+export const ARMOUR_KINDS = {
+  helm: { name: 'Med Helm', slot: 'head', bars: 1, lvl: 3, art: 'helm' },
+  shield: { name: 'Kiteshield', slot: 'shield', bars: 2, lvl: 8, art: 'shield' },
+  legs: { name: 'Platelegs', slot: 'legs', bars: 3, lvl: 16, art: 'legs' },
+  body: { name: 'Platebody', slot: 'body', bars: 5, lvl: 18, art: 'body' },
+  gloves: { name: 'Gauntlets', slot: 'gloves', bars: 1, lvl: 10, art: 'gloves' },
+  boots: { name: 'Plate boots', slot: 'boots', bars: 1, lvl: 12, art: 'boots' },
+};
+export const GEAR_KINDS = { ...Object.fromEntries(Object.entries(WEAPON_KINDS).map(([k, w]) => [k, { ...w, slot: 'weapon', smithLevel: w.lvl, art: k }])), ...Object.fromEntries(Object.entries(ARMOUR_KINDS).map(([k, a]) => [k, { ...a, smithLevel: a.lvl }])) };
+/** all kinds that can be smithed (gear + pickaxe) */
+export const SMITH_KINDS = { ...GEAR_KINDS, pickaxe: { name: 'Pickaxe', bars: 2, smithLevel: 5, art: 'pickaxe', tool: 'pickaxe' } };
+// smithing level needed per tier, added to the kind's own level (capped at 99)
 export const TIER_SMITH = [0, 14, 29, 49, 69, 84];
+export const BAR_XP = [12.5, 25, 37.5, 50, 62.5, 75];
 export const TIER_BAR = ['bronze_bar', 'iron_bar', 'steel_bar', 'mithril_bar', 'adamant_bar', 'rune_bar'];
 
 export const ITEMS = {};
@@ -68,6 +92,10 @@ add('coins', { name: 'Coins', stack: true, value: 1, art: 'coins' });
 add('copper_ore', { name: 'Copper ore', stack: true, value: 4, art: 'ore', c: '#c9773a' });
 add('tin_ore', { name: 'Tin ore', stack: true, value: 4, art: 'ore', c: '#b9c2cf' });
 add('iron_ore', { name: 'Iron ore', stack: true, value: 12, art: 'ore', c: '#8f5a4a' });
+add('coal', { name: 'Coal', stack: true, value: 20, art: 'ore', c: '#33343a' });
+add('mithril_ore', { name: 'Mithril ore', stack: true, value: 50, art: 'ore', c: '#4a68c8' });
+add('adamant_ore', { name: 'Adamantite ore', stack: true, value: 100, art: 'ore', c: '#3aa05a' });
+add('runite_ore', { name: 'Runite ore', stack: true, value: 300, art: 'ore', c: '#38c8d8' });
 add('logs', { name: 'Logs', stack: true, value: 4, art: 'log', c: '#b9824a' });
 add('oak_logs', { name: 'Oak logs', stack: true, value: 10, art: 'log', c: '#9a6a3a' });
 add('bones', { name: 'Bones', stack: true, value: 1, art: 'bones', c: '#f3ead2' });
@@ -75,11 +103,7 @@ add('feather', { name: 'Feather', stack: true, value: 2, art: 'feather', c: '#ff
 add('wolf_pelt', { name: 'Wolf pelt', stack: true, value: 18, art: 'pelt', c: '#8a8f98' });
 for (const [i, t] of TIERS.entries()) add(TIER_BAR[i], { name: `${t.name} bar`, stack: true, value: [10, 24, 50, 100, 200, 600][i], art: 'bar', c: t.color });
 // tools (non-stackable; the best one in the bag is used automatically)
-add('bronze_pickaxe', { name: 'Bronze pickaxe', tool: 'pickaxe', toolTier: 0, value: 20, art: 'pickaxe', c: TIERS[0].color });
-add('iron_pickaxe', { name: 'Iron pickaxe', tool: 'pickaxe', toolTier: 1, value: 60, art: 'pickaxe', c: TIERS[1].color });
 add('hammer', { name: 'Hammer', tool: 'hammer', toolTier: 0, value: 6, art: 'hammer', c: '#9aa3ad' });
-add('bronze_axe', { name: 'Bronze axe', tool: 'axe', toolTier: 0, value: 20, art: 'axe', c: TIERS[0].color });
-add('iron_axe', { name: 'Iron axe', tool: 'axe', toolTier: 1, value: 60, art: 'axe', c: TIERS[1].color });
 
 add('small_net', { name: 'Small fishing net', tool: 'net', toolTier: 0, value: 10, art: 'net', c: '#c9a46a' });
 add('fishing_rod', { name: 'Fishing rod', tool: 'rod', toolTier: 0, value: 25, art: 'rod', c: '#c9a46a' });
@@ -114,15 +138,19 @@ for (const [id, raw, cooked, heal, val, c, lvl, stop, xp] of MEAT) {
 add('burnt_food', { name: 'Burnt food', stack: true, value: 1, art: 'fish', c: '#2e2a2a' });
 export const isFood = (id) => !!ITEMS[id]?.heal;
 function shadeHex(h) { const n = parseInt(h.slice(1), 16); const f = (v) => Math.round(v * 0.7).toString(16).padStart(2, '0'); return `#${f(n >> 16)}${f((n >> 8) & 255)}${f(n & 255)}`; }
-// gear: generated for every tier so steel..rune exist as data (only bronze/iron have smithing recipes in the demo)
+// gear: generated for every tier and kind. Weapons carry per-type attack bonuses `a`; `bonus.atk` is the headline (best type).
 for (const [i, t] of TIERS.entries()) {
-  for (const [kind, k] of Object.entries(GEAR_KINDS)) {
-    const id = `${t.id}_${kind}`;
-    const bonus = { atk: 0, str: 0, def: 0 };
-    if (kind === 'sword') { bonus.atk = SWORD.atk[i]; bonus.str = SWORD.str[i]; }
-    else if (kind === 'dagger') { bonus.atk = DAGGER.atk[i]; bonus.str = DAGGER.str[i]; }
-    else bonus.def = { helm: HELM, shield: SHIELD, body: BODY, legs: LEGS }[kind][i];
-    add(id, { name: `${t.name} ${k.name}`, slot: k.slot, kind, tier: i, bonus, interval: k.interval || 0, req: { skill: k.slot === 'weapon' ? 'attack' : 'defence', level: t.req }, value: Math.round((8 + k.bars * 10) * (1 + i * 1.6)), art: k.art, c: t.color, d: t.dark });
+  for (const [kind, k] of Object.entries(SMITH_KINDS)) {
+    const id = `${t.id}_${kind}`, w = WEAPON_KINDS[kind];
+    const bonus = { atk: 0, str: 0, def: 0, a: { stab: 0, slash: 0, crush: 0 } };
+    if (w) { for (const ty of DMG_TYPES) bonus.a[ty] = Math.round(ATKB[i] * w.a[ty]); bonus.atk = Math.max(...DMG_TYPES.map((ty) => bonus.a[ty])); bonus.str = Math.round(STRB[i] * w.str); }
+    else if (ARMOUR[kind]) bonus.def = ARMOUR[kind][i];
+    const it = { name: `${t.name} ${kind === 'pickaxe' ? 'pickaxe' : k.name.toLowerCase().replace(/^med |^plate |^kite/, (m) => m)}`, kind, tier: i, bonus, value: Math.round((8 + k.bars * 10) * (1 + i * 1.6)), art: k.art, c: t.color, d: t.dark };
+    it.name = kind === 'axe' ? `${t.name} axe` : kind === 'pickaxe' ? `${t.name} pickaxe` : `${t.name} ${k.name.charAt(0).toLowerCase()}${k.name.slice(1)}`;
+    if (k.slot) { it.slot = k.slot; it.req = { skill: w ? 'attack' : 'defence', level: t.req }; }
+    if (w) { it.interval = w.interval; it.two = !!w.two; it.reach = w.reach || 0; it.wk = kind; }
+    if (k.tool) { it.tool = k.tool; it.toolTier = i; }
+    add(id, it);
   }
 }
 export const isStackable = (id) => !!ITEMS[id]?.stack;
@@ -132,9 +160,10 @@ export const RECIPES = [
   { id: 'bronze_bar', station: 'furnace', out: 'bronze_bar', inputs: { copper_ore: 1, tin_ore: 1 }, level: 1, xp: 6.25, chance: 1 },
   { id: 'iron_bar', station: 'furnace', out: 'iron_bar', inputs: { iron_ore: 1 }, level: 15, xp: 12.5, chance: 0.5 },
 ];
-for (const [i, t] of TIERS.slice(0, 2).entries()) {
-  for (const [kind, k] of Object.entries(GEAR_KINDS)) {
-    RECIPES.push({ id: `${t.id}_${kind}`, station: 'anvil', out: `${t.id}_${kind}`, inputs: { [TIER_BAR[i]]: k.bars }, level: k.smithLevel + TIER_SMITH[i], xp: k.bars * [12.5, 25][i], chance: 1 });
+for (const [id, o] of Object.entries({ steel_bar: [{ iron_ore: 1, coal: 2 }, 30, 17.5], mithril_bar: [{ mithril_ore: 1, coal: 4 }, 50, 30], adamant_bar: [{ adamant_ore: 1, coal: 6 }, 70, 37.5], rune_bar: [{ runite_ore: 1, coal: 8 }, 85, 50] })) RECIPES.push({ id, station: 'furnace', out: id, inputs: o[0], level: o[1], xp: o[2], chance: 1 });
+for (const [i] of TIERS.entries()) {
+  for (const [kind, k] of Object.entries(SMITH_KINDS)) {
+    RECIPES.push({ id: `${TIERS[i].id}_${kind}`, station: 'anvil', tier: i, out: `${TIERS[i].id}_${kind}`, inputs: { [TIER_BAR[i]]: k.bars }, level: Math.min(99, k.smithLevel + TIER_SMITH[i]), xp: k.bars * BAR_XP[i], chance: 1 });
   }
 }
 /** Cooking: station 'cook' = campfire or range. Burn chance starts at 50% (fire) / 30% (range) at the required level and falls to 0 at `stop`. */
@@ -146,20 +175,25 @@ export const STATIONS = {
   range: { name: 'Range', menu: 'Cooking', blurb: 'Cook raw food. A range burns less than a campfire.' },
   furnace: { name: 'Furnace', menu: 'Smelting', blurb: 'Smelt ore into bars.' },
   anvil: { name: 'Anvil', menu: 'Smithing', blurb: 'Hammer bars into gear. Needs a hammer.' },
+  altar: { name: 'Enchanting altar', menu: 'Enchanting', blurb: 'Spend Enchant Points to roll random enchantments.' },
   bank: { name: 'Bank chest', menu: 'Bank' },
   store: { name: 'General store', menu: 'Shop' },
 };
 
 // ---- monsters (melee). hp/atk/str/def are RuneScape-style levels; maxHit is the strongest hit.
 export const MONSTERS = {
-  chicken: { name: 'Chicken', level: 1, hp: 3, atk: 1, def: 1, maxHit: 1, interval: 1.8, color: '#f7f1df',
+  chicken: { name: 'Chicken', level: 1, hp: 3, atk: 1, def: 1, maxHit: 1, interval: 1.8, color: '#f7f1df', family: 'beast', defB: { stab: 0, slash: 0, crush: 0 }, epChance: 0.03,
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'raw_chicken', p: 0.8, n: [1, 1] }, { id: 'feather', p: 0.6, n: [2, 6] }, { id: 'coins', p: 0.5, n: [1, 3] }] },
-  cow: { name: 'Cow', level: 2, hp: 8, atk: 1, def: 1, maxHit: 1, interval: 1.8, color: '#e8e0d0',
+  cow: { name: 'Cow', level: 2, hp: 8, atk: 1, def: 1, maxHit: 1, interval: 1.8, color: '#e8e0d0', family: 'beast', defB: { stab: 0, slash: 0, crush: 5 }, epChance: 0.05,
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'raw_beef', p: 1, n: [1, 1] }, { id: 'coins', p: 0.3, n: [1, 5] }] },
-  goblin: { name: 'Goblin', level: 2, hp: 5, atk: 1, def: 1, maxHit: 1, interval: 1.8, color: '#6fbf4a',
-    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.8, n: [3, 12] }, { id: 'bronze_dagger', p: 0.03, n: [1, 1] }, { id: 'bronze_helm', p: 0.03, n: [1, 1] }] },
-  wolf: { name: 'Wolf', level: 25, hp: 34, atk: 22, def: 18, maxHit: 4, interval: 1.8, color: '#8a8f98',
-    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'raw_wolf', p: 0.6, n: [1, 1] }, { id: 'wolf_pelt', p: 0.5, n: [1, 1] }, { id: 'coins', p: 0.4, n: [8, 30] }, { id: 'iron_sword', p: 0.03, n: [1, 1] }] },
+  goblin: { name: 'Goblin', level: 2, hp: 5, atk: 1, def: 1, maxHit: 1, interval: 1.8, color: '#6fbf4a', family: 'humanoid', defB: { stab: 0, slash: 5, crush: 10 }, epChance: 0.06,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.8, n: [3, 12] }, { id: 'bronze_dagger', p: 0.03, n: [1, 1] }, { id: 'bronze_helm', p: 0.03, n: [1, 1] }, { id: 'bronze_mace', p: 0.03, n: [1, 1] }, { id: 'bronze_scimitar', p: 0.02, n: [1, 1] }, { id: 'bronze_spear', p: 0.02, n: [1, 1] }] },
+  wolf: { name: 'Wolf', level: 25, hp: 34, atk: 22, def: 18, maxHit: 4, interval: 1.8, color: '#8a8f98', family: 'beast', defB: { stab: 15, slash: 5, crush: 25 }, epChance: 0.12,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'raw_wolf', p: 0.6, n: [1, 1] }, { id: 'wolf_pelt', p: 0.5, n: [1, 1] }, { id: 'coins', p: 0.4, n: [8, 30] }, { id: 'iron_sword', p: 0.03, n: [1, 1] }, { id: 'iron_scimitar', p: 0.02, n: [1, 1] }, { id: 'iron_mace', p: 0.02, n: [1, 1] }] },
+  alpha_wolf: { name: 'Alpha wolf', level: 38, hp: 70, atk: 35, def: 30, maxHit: 8, interval: 1.8, color: '#4a4f5a', family: 'beast', defB: { stab: 30, slash: 20, crush: 40 }, boss: true, respawn: 45, epFlat: 8, epChance: 0,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'wolf_pelt', p: 1, n: [1, 2] }, { id: 'coins', p: 1, n: [60, 160] }, { id: 'iron_2h', p: 0.15, n: [1, 1] }, { id: 'iron_longsword', p: 0.15, n: [1, 1] }, { id: 'steel_scimitar', p: 0.06, n: [1, 1] }] },
+  hill_giant: { name: 'Hill giant', level: 28, hp: 40, atk: 25, def: 25, maxHit: 7, interval: 2.1, color: '#c9a27a', family: 'giant', defB: { stab: 25, slash: 30, crush: 0 }, epChance: 0.2,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.9, n: [20, 80] }, { id: 'steel_sword', p: 0.03, n: [1, 1] }, { id: 'steel_warhammer', p: 0.03, n: [1, 1] }, { id: 'steel_2h', p: 0.02, n: [1, 1] }, { id: 'steel_halberd', p: 0.02, n: [1, 1] }, { id: 'iron_battleaxe', p: 0.04, n: [1, 1] }, { id: 'coal', p: 0.3, n: [1, 3] }] },
 };
 // ---- resource nodes. chance = base success per attempt at the required level (+1.2% per level above, capped 90%).
 export const NODES = {
@@ -167,6 +201,10 @@ export const NODES = {
   tin: { name: 'Tin rocks', skill: 'mining', tool: 'pickaxe', level: 1, xp: 17.5, item: 'tin_ore', interval: 2, respawn: 4, chance: 0.45, color: '#b9c2cf' },
   iron: { name: 'Iron rocks', skill: 'mining', tool: 'pickaxe', level: 15, xp: 35, item: 'iron_ore', interval: 2.4, respawn: 6, chance: 0.4, color: '#8f5a4a' },
   tree: { name: 'Tree', skill: 'woodcutting', tool: 'axe', level: 1, xp: 25, item: 'logs', interval: 2.2, respawn: 5, chance: 0.5, color: '#46a64a' },
+  coal: { name: 'Coal rocks', skill: 'mining', tool: 'pickaxe', level: 30, xp: 50, item: 'coal', interval: 2.6, respawn: 6, chance: 0.4, color: '#33343a' },
+  mithril: { name: 'Mithril rocks', skill: 'mining', tool: 'pickaxe', level: 55, xp: 80, item: 'mithril_ore', interval: 3, respawn: 9, chance: 0.35, color: '#4a68c8' },
+  adamant: { name: 'Adamantite rocks', skill: 'mining', tool: 'pickaxe', level: 70, xp: 95, item: 'adamant_ore', interval: 3.2, respawn: 12, chance: 0.3, color: '#3aa05a' },
+  runite: { name: 'Runite rocks', skill: 'mining', tool: 'pickaxe', level: 85, xp: 125, item: 'runite_ore', interval: 3.6, respawn: 20, chance: 0.25, color: '#38c8d8' },
   oak: { name: 'Oak tree', skill: 'woodcutting', tool: 'axe', level: 15, xp: 37.5, item: 'oak_logs', interval: 2.6, respawn: 7, chance: 0.4, color: '#2f8a3a' },
 };
 
@@ -187,18 +225,23 @@ export const nodeYields = (n) => n.yields || [{ item: n.item, level: n.level, xp
 export const AREAS = {
   meadow: {
     name: 'Starter Meadow', width: 2300, spawn: 160, req: { combat: 1 }, sky: ['#bfe8ff', '#e8f7ff'], hill: ['#8fd48a', '#6fbf6a'], ground: '#59b857',
-    entities: [['station', 'bank', 300], ['station', 'store', 430], ['station', 'range', 520], ['station', 'furnace', 610], ['station', 'anvil', 720],
+    entities: [['station', 'altar', 225], ['station', 'bank', 300], ['station', 'store', 430], ['station', 'range', 520], ['station', 'furnace', 610], ['station', 'anvil', 720],
       ['node', 'pond', 830], ['node', 'tree', 930], ['node', 'tree', 1020], ['station', 'fire', 1100], ['node', 'copper', 1190], ['node', 'tin', 1270],
       ['monster', 'chicken', 1430], ['monster', 'chicken', 1510], ['monster', 'cow', 1650], ['monster', 'cow', 1730], ['monster', 'goblin', 1870], ['monster', 'goblin', 1960], ['sign', 'quarry', 2190]],
   },
   quarry: {
-    name: 'Stony Quarry', width: 2100, spawn: 160, req: { combat: 10 }, sky: ['#d7d3cf', '#efe9e1'], hill: ['#b7ada0', '#9b9186'], ground: '#a08e78',
-    entities: [['sign', 'meadow', 70], ['node', 'iron', 400], ['node', 'iron', 490], ['node', 'oak', 650], ['node', 'oak', 740], ['station', 'fire', 830], ['node', 'stream', 930],
-      ['monster', 'wolf', 1080], ['monster', 'wolf', 1260], ['monster', 'wolf', 1440], ['node', 'deep', 1600], ['node', 'cage', 1700], ['node', 'copper', 1830], ['node', 'tin', 1910]],
+    name: 'Stony Quarry', width: 2300, spawn: 160, req: { combat: 10 }, sky: ['#d7d3cf', '#efe9e1'], hill: ['#b7ada0', '#9b9186'], ground: '#a08e78',
+    entities: [['sign', 'meadow', 70], ['node', 'iron', 400], ['node', 'iron', 490], ['node', 'coal', 580], ['node', 'coal', 660], ['node', 'oak', 770], ['node', 'oak', 850], ['station', 'fire', 930], ['node', 'stream', 1030],
+      ['monster', 'wolf', 1180], ['monster', 'wolf', 1350], ['monster', 'alpha_wolf', 1540], ['node', 'deep', 1720], ['node', 'cage', 1820], ['node', 'copper', 1950], ['node', 'tin', 2030], ['sign', 'peaks', 2220]],
+  },
+  peaks: {
+    name: 'Windy Peaks', width: 2000, spawn: 160, req: { combat: 20 }, sky: ['#cfe3f5', '#f1f7fc'], hill: ['#a9b8c9', '#8a9bb0'], ground: '#8f9aa6',
+    entities: [['sign', 'quarry', 70], ['node', 'coal', 300], ['node', 'coal', 380], ['node', 'mithril', 560], ['node', 'mithril', 640], ['node', 'adamant', 830], ['node', 'adamant', 910], ['node', 'runite', 1060],
+      ['monster', 'hill_giant', 1240], ['monster', 'hill_giant', 1420], ['monster', 'hill_giant', 1600], ['station', 'fire', 1790]],
   },
 };
 export const AREA_IDS = Object.keys(AREAS);
 export const START_AREA = 'meadow';
 export const BAG_SLOTS = 28;
-export const SHOP_BUY = ['hammer', 'bronze_pickaxe', 'bronze_axe', 'iron_pickaxe', 'iron_axe', 'small_net', 'fishing_rod', 'harpoon', 'lobster_pot', 'feather'];
+export const SHOP_BUY = ['hammer', 'bronze_pickaxe', 'bronze_axe', 'iron_pickaxe', 'iron_axe', 'bronze_dagger', 'bronze_scimitar', 'bronze_mace', 'small_net', 'fishing_rod', 'harpoon', 'lobster_pot', 'feather'];
 export const SELL_RATE = 0.5;

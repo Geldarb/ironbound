@@ -1,6 +1,6 @@
 // Single-slot localStorage save (versioned; the shape leaves room for more skills / slots later).
 import { SKILL_IDS, SLOT_IDS, START_AREA } from './data.js';
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const SAVE_KEY = 'ironbound-save-v1';
 export const LOOKS = [
   { skin: '#f2c9a0', hair: '#5a3a1e', shirt: '#3b8eea' },
@@ -17,6 +17,7 @@ export function newData(name, look = 0) {
     bag: [{ id: 'bronze_pickaxe', n: 1 }, { id: 'bronze_axe', n: 1 }, { id: 'hammer', n: 1 }, { id: 'small_net', n: 1 }],
     bank: {}, equip: Object.fromEntries(SLOT_IDS.map((s) => [s, null])), visited: {}, stats: { kills: 0, played: 0 },
     autoEat: { on: true, pct: 50 }, lastSeen: 0, activity: null,
+    ep: 20, pity: 0, equipEnch: {}, bankGear: [], visitedAreas: { meadow: true },
   };
 }
 /** Fills any missing field so older/partial saves load (add migrations here when SAVE_VERSION grows). */
@@ -32,6 +33,13 @@ export function migrate(d) {
   out.lastSeen = Number(d.lastSeen) || 0;
   // v1 -> v2: fishing/cooking skills start at 0 (filled above); everyone gets the starter net. Levels are untouched (the XP table is unchanged; only gain rates changed).
   if ((d.v || 1) < 2 && !out.bag.some((x) => x.id === 'small_net') && out.bag.length < 28) out.bag.push({ id: 'small_net', n: 1 });
+  out.equipEnch = d.equipEnch && typeof d.equipEnch === 'object' ? d.equipEnch : {};
+  out.bankGear = Array.isArray(d.bankGear) ? d.bankGear : [];
+  out.visitedAreas = { meadow: true, ...(d.visitedAreas || {}), [out.area]: true };
+  out.pity = Number(d.pity) || 0;
+  // v2 -> v3: Enchant Points arrive (everyone gets a 20 EP welcome gift), weapons gain styles (stance ids stay valid), boots/gloves slots start empty
+  out.ep = (d.v || 1) < 3 ? 20 + (Number(d.ep) || 0) : Number(d.ep) || 0;
+  if (!['accurate', 'aggressive', 'controlled', 'defensive'].includes(out.stance)) out.stance = 'accurate';
   out.v = SAVE_VERSION;
   return out;
 }

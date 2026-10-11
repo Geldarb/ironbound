@@ -1,8 +1,10 @@
 // Unit tests: XP curve, combat formulas, gear tiers, recipes, gathering, game loop, saves. Run: node test/unit.mjs
 import { xpForLevel, levelForXp } from '../src/xp.js';
 import { maxHit, hitChance, attackRoll, combatLevel, heroCombat, gearBonuses } from '../src/combat.js';
-import { ITEMS, RECIPES, RECIPE_BY_ID, MONSTERS, NODES, AREAS, TIERS, XP_RATE, SKILL_IDS, COOKABLE, FOOD, nodeYields, burnChance } from '../src/data.js';
+import { WEAPON_KINDS, UNARMED, stanceXp, ITEMS, RECIPES, RECIPE_BY_ID, MONSTERS, NODES, AREAS, TIERS, XP_RATE, SKILL_IDS, COOKABLE, FOOD, nodeYields, burnChance } from '../src/data.js';
 import { simulateOffline } from '../src/offline.js';
+import { RARITIES, rollRarity, rollEnchant, rollMods, rollCost, sumMods, nextPity, enchantCategory, MODS, PITY_RARE, PITY_EPIC } from '../src/enchant.js';
+import { expectedDps, heroHitChance, monsterDefRoll, weaponKind, activeStyle } from '../src/combat.js';
 import { Game } from '../src/game.js';
 import { newData, migrate } from '../src/save.js';
 import { mulberry32 } from '../src/rng.js';
@@ -63,7 +65,7 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   g.data.bag = []; g.hammer = 0;
   g.addItem('bronze_bar', 3); check(!g.craft('bronze_dagger', 1).done, 'anvil needs a hammer');
   check(RECIPES.every((x) => ITEMS[x.out] && Object.keys(x.inputs).every((i) => ITEMS[i])), 'recipes reference real items');
-  check(RECIPES.filter((x) => x.station === 'anvil').length === 12, 'bronze+iron smithing recipes (6 kinds x 2)');
+  check(RECIPES.filter((x) => x.station === 'anvil').length === 108, 'smithing recipes: 18 kinds x 6 tiers');
 }
 
 // --- bag, bank, shop
@@ -78,7 +80,7 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   check(g.withdraw('logs', 10) === 4 && !g.data.bank.logs && g.count('logs') === 5, 'withdraw');
   check(g.sell('logs', 5) === 5 && g.data.coins === 5 + 5 * g.sellValue('logs') && g.count('logs') === 0, 'sell');
   g.data.coins = 1000; g.data.bag = [];
-  check(g.buy('iron_pickaxe') && g.count('iron_pickaxe') === 1 && g.data.coins === 940, 'buy tool');
+  check(g.buy('iron_pickaxe') && g.count('iron_pickaxe') === 1 && g.data.coins === 1000 - ITEMS.iron_pickaxe.value, 'buy tool');
   check(g.bestTool('pickaxe').id === 'iron_pickaxe', 'best tool picked');
 }
 
@@ -126,7 +128,7 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   g.data.hp = 2; g.select(wolf.id);
   for (let i = 0; i < 400; i++) g.update(0.05);
   check(g.target === null || g.data.hp === g.maxHp, 'low HP retreats or dies back to start');
-  check(Object.keys(AREAS).length === 2 && Object.values(NODES).every((x) => nodeYields(x).every((y) => ITEMS[y.item])), 'area/node tables sane');
+  check(Object.keys(AREAS).length === 3 && Object.values(NODES).every((x) => nodeYields(x).every((y) => ITEMS[y.item])), 'area/node tables sane');
 }
 
 // --- saves
@@ -134,7 +136,7 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   const d = newData('Alice', 2);
   check(d.xp.hitpoints === 1154 && d.bag.length === 4 && d.name === 'Alice', 'new character');
   const m = migrate({ name: 'Old', xp: { attack: 500 } });
-  check(m.xp.attack === 500 && m.xp.mining === 0 && Array.isArray(m.bag) && m.equip.weapon === null && m.v === 2 && m.xp.fishing === 0 && m.autoEat.pct === 50, 'migration fills missing fields');
+  check(m.xp.attack === 500 && m.xp.mining === 0 && Array.isArray(m.bag) && m.equip.weapon === null && m.v === 3 && m.xp.fishing === 0 && m.autoEat.pct === 50, 'migration fills missing fields');
   const g = new Game(JSON.parse(JSON.stringify(d))); g.data.xp.mining = 300;
   const g2 = new Game(migrate(JSON.parse(JSON.stringify(g.data))));
   check(g2.level('mining') === levelForXp(300) && g2.data.hp <= g2.maxHp, 'save round-trip');
@@ -238,7 +240,7 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   const wolfy = (food) => { const w = mk(4); w.enterArea('quarry', 1000); w.data.bag.push(...(food ? [{ id: 'lobster', n: food }] : [])); w.data.hp = w.maxHp; w.select(w.ents.find((e) => e.kind === 'wolf').id); w.snapshot(1000); return w; };
   const w0 = wolfy(0), rw0 = simulateOffline(w0, 7200, { rng: mulberry32(2) });
   check(rw0.stopped && rw0.kills <= 1 && w0.data.hp >= 1, `wolf without food: stops (${rw0.stopped}, ${rw0.kills} kills) and survives`);
-  const wf = wolfy(5); for (const k of ['attack', 'strength', 'defence']) wf.data.xp[k] = xpForLevel(30); wf.data.xp.hitpoints = xpForLevel(30);
+  const wf = wolfy(5); for (const k of ['attack', 'strength', 'defence', 'hitpoints']) wf.data.xp[k] = xpForLevel(50); wf.data.hp = wf.maxHp;
   const rwf = simulateOffline(wf, 7200, { rng: mulberry32(2) });
   check(rwf.kills > 3 && (rwf.ate.lobster > 0 || !rwf.stopped) && wf.count('lobster') === 5 - (rwf.ate.lobster || 0), `strong hero kills wolves, food is deducted (${JSON.stringify(rwf.ate)}, stopped: ${rwf.stopped})`);
   const wlow = wolfy(2); const rl = simulateOffline(wlow, 7200, { rng: mulberry32(2) });
@@ -266,5 +268,170 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   check(g.level('attack') === levelForXp(5000) && g.level('strength') === levelForXp(2000) && g.data.xp.attack === 5000, 'old saves keep their XP and levels');
   check(m.bag.some((s) => s.id === 'small_net') && m.xp.fishing === 0 && m.xp.cooking === 0, 'old saves gain fishing/cooking + a net');
 }
+// --- weapon types
+{
+  const kinds = Object.keys(WEAPON_KINDS);
+  check(kinds.length === 11 && ['dagger', 'sword', 'scimitar', 'longsword', 'mace', 'warhammer', 'axe', 'battleaxe', '2h', 'spear', 'halberd'].every((k) => kinds.includes(k)), '11 weapon kinds');
+  check(WEAPON_KINDS.dagger.interval < WEAPON_KINDS['2h'].interval && WEAPON_KINDS.scimitar.interval <= WEAPON_KINDS.sword.interval, 'dagger/scimitar fast, 2h slow');
+  const bars = { dagger: 1, sword: 1, scimitar: 2, longsword: 2, mace: 1, axe: 1, battleaxe: 3, '2h': 3, spear: 1, halberd: 2 };
+  check(Object.entries(bars).every(([k, b]) => RECIPE_BY_ID[`iron_${k}`].inputs.iron_bar === b), 'RS-like bar counts per weapon');
+  check(['bronze', 'iron', 'steel', 'mithril', 'adamant', 'rune'].every((t) => kinds.every((k) => RECIPE_BY_ID[`${t}_${k}`]?.station === 'anvil')), 'smithing recipe for every weapon x tier');
+  check(RECIPE_BY_ID.rune_bar.inputs.coal === 8 && RECIPE_BY_ID.steel_bar.inputs.coal === 2 && RECIPE_BY_ID.mithril_bar.inputs.mithril_ore === 1, 'steel..rune bars need coal');
+  check(Object.values(RECIPE_BY_ID).every((r) => r.level <= 99), 'no recipe above level 99');
+  const a = (id) => ITEMS[id].bonus.a;
+  check(a('iron_dagger').stab > a('iron_dagger').slash && a('iron_scimitar').slash > a('iron_sword').slash, 'dagger stabs, scimitar has best slash accuracy');
+  check(a('iron_mace').crush > 0 && a('iron_mace').slash === 0 && a('iron_warhammer').crush > a('iron_mace').crush, 'maces crush, warhammer crushes harder');
+  check(ITEMS.iron_2h.bonus.str > ITEMS.iron_sword.bonus.str * 1.5 && ITEMS.iron_2h.two && ITEMS.iron_halberd.two && !ITEMS.iron_sword.two, '2h hits much harder and is two-handed');
+  check(ITEMS.iron_halberd.reach > ITEMS.iron_spear.reach && ITEMS.iron_spear.reach > 0, 'spear/halberd reach');
+  check(ITEMS.steel_sword.req.level === 5 && ITEMS.rune_2h.req.level === 40 && ITEMS.mithril_body.req.level === 20, 'tier level requirements 1/1/5/20/30/40');
+  check(ITEMS.bronze_axe.tool === 'axe' && ITEMS.bronze_axe.slot === 'weapon', 'the axe is both a tool and a weapon');
+  // stances per weapon
+  const lv = { attack: 40, strength: 40, defence: 40, hitpoints: 40 };
+  const eq = (w) => ({ weapon: w });
+  check(heroCombat(lv, eq('iron_scimitar'), 'controlled').type === 'stab' && heroCombat(lv, eq('iron_scimitar'), 'accurate').type === 'slash', 'scimitar: Chop slash, Lunge stab');
+  check(activeStyle(eq('iron_spear'), 'accurate').stance === 'controlled', 'spear has no Accurate: falls back to Controlled');
+  check(heroCombat(lv, {}, 'accurate').style.name === 'Punch', 'unarmed punches');
+  check(heroCombat(lv, eq('iron_mace'), 'aggressive').type === 'crush', 'mace pummel is crush');
+  check(near(stanceXp('controlled').reduce((x, y) => x + y[1], 0), 1) && stanceXp('controlled').length === 3 && stanceXp('accurate')[0][0] === 'attack', 'controlled splits xp 3 ways');
+  const cl = heroCombat(lv, eq('iron_scimitar'), 'controlled'), ac = heroCombat(lv, eq('iron_scimitar'), 'accurate');
+  check(cl.atkRoll < ac.atkRoll && cl.defRoll > ac.defRoll, 'controlled gives +1 to all three, accurate +3 attack');
+  check(heroCombat(lv, eq('iron_2h'), 'aggressive').maxHit > heroCombat(lv, eq('iron_dagger'), 'aggressive').maxHit, '2h max hit beats dagger');
+  check(heroCombat(lv, eq('iron_dagger'), 'accurate').interval === 1.2 && heroCombat(lv, eq('iron_2h'), 'accurate').interval === 2.1, 'weapon speed drives the attack interval');
+  // damage type vs monster defence
+  const giant = MONSTERS.hill_giant, hcCr = heroCombat(lv, eq('iron_mace'), 'accurate'), hcSl = heroCombat(lv, eq('iron_scimitar'), 'accurate');
+  check(monsterDefRoll(giant, 'crush') < monsterDefRoll(giant, 'slash') && monsterDefRoll(giant, 'crush') < monsterDefRoll(giant, 'stab'), 'giants are weak to crush');
+  check(Object.values(MONSTERS).every((m) => m.defB && ['stab', 'slash', 'crush'].every((t) => typeof m.defB[t] === 'number')), 'every monster has style defences');
+  check(heroHitChance(hcCr, giant) > hitChance(hcCr.atkRoll, monsterDefRoll(giant, 'slash')), 'style defence changes hit chance');
+  check(MONSTERS.wolf.defB.crush > MONSTERS.wolf.defB.slash, 'wolves resist crush');
+  void hcSl;
+  // 2h slot rules
+  const g = mk(); setLv(g, 'attack', 40); setLv(g, 'defence', 40);
+  g.addItem('iron_sword', 1); g.addItem('iron_shield', 1); g.addItem('iron_2h', 1);
+  g.equip('iron_sword'); g.equip('iron_shield');
+  check(g.data.equip.weapon === 'iron_sword' && g.data.equip.shield === 'iron_shield', 'sword + shield');
+  g.equip('iron_2h');
+  check(g.data.equip.weapon === 'iron_2h' && g.data.equip.shield === null && g.count('iron_shield') === 1 && g.count('iron_sword') === 1, '2h removes the shield (back to the bag)');
+  g.equip('iron_shield');
+  check(g.data.equip.shield === 'iron_shield' && g.data.equip.weapon === null && g.count('iron_2h') === 1, 'equipping a shield removes the 2h');
+  // full bag: cannot swap if items would not fit
+  const f = mk(); setLv(f, 'attack', 40); setLv(f, 'defence', 40);
+  f.data.equip.weapon = 'iron_sword'; f.data.equip.shield = 'iron_shield';
+  f.data.bag = [{ id: 'iron_2h', n: 1 }]; for (let i = 0; i < 27; i++) f.data.bag.push({ id: 'bones', n: 1 });
+  check(!f.equip('iron_2h') && f.data.equip.shield === 'iron_shield', '2h swap refused when the bag cannot hold both pieces');
+  // spear reaches further
+  const sp = mk(); sp.data.equip.weapon = 'iron_spear'; check(sp.combat.reach === 18, 'combat exposes reach');
+  // boots/gloves slots exist
+  check(ITEMS.iron_boots.slot === 'boots' && ITEMS.iron_gloves.slot === 'gloves' && 'boots' in newData('x').equip, 'boots and gloves slots');
+  // upper-tier ore data
+  check(NODES.coal.level === 30 && NODES.mithril.level > NODES.coal.level && NODES.runite.level === 85 && AREAS.quarry.entities.some((e) => e[1] === 'coal') && AREAS.peaks.entities.some((e) => e[1] === 'adamant'), 'coal in the quarry, mithril/adamant/rune in the peaks');
+  // smithing a weapon: iron scimitar needs 2 bars at level 19
+  const sm = mk(); sm.data.visited.anvil = true; sm.addItem('iron_bar', 2); setLv(sm, 'smithing', 18);
+  check(!sm.recipeStatus(RECIPE_BY_ID.iron_scimitar).ok, 'scimitar locked at smithing 18'); setLv(sm, 'smithing', 19);
+  check(sm.craft('iron_scimitar').done === 1 && sm.count('iron_scimitar') === 1 && sm.count('iron_bar') === 0, 'smith an iron scimitar');
+}
+// --- monsters: bosses and drops
+check(MONSTERS.alpha_wolf.boss && MONSTERS.alpha_wolf.epFlat >= 5 && MONSTERS.alpha_wolf.respawn > 30, 'alpha wolf is a boss');
+
+// --- enchanting
+{
+  const w = RARITIES.map((r) => r.w);
+  check(RARITIES.length === 6 && near(w.reduce((a, b) => a + b, 0), 100) && w[0] === 60 && w[5] === 0.1, 'rarity weights 60/25/10/4/0.9/0.1');
+  const rng = mulberry32(7), counts = [0, 0, 0, 0, 0, 0], N = 40000;
+  for (let i = 0; i < N; i++) counts[rollRarity(rng, 0)]++;
+  check(Math.abs(counts[0] / N - 0.6) < 0.015 && Math.abs(counts[1] / N - 0.25) < 0.015 && Math.abs(counts[2] / N - 0.1) < 0.01 && counts[5] < 80, 'rolled rarities follow the weights');
+  check([...Array(200)].every((_, i) => rollRarity(mulberry32(i + 1), PITY_RARE) >= 2) && [...Array(200)].every((_, i) => rollRarity(mulberry32(i + 1), PITY_EPIC) >= 3), 'pity guarantees Rare+ at 10 and Epic+ at 20');
+  check(nextPity(5, 1) === 6 && nextPity(5, 2) === 6 && nextPity(5, 3) === 0, 'pity counter resets on Epic+');
+  for (let r = 0; r < 6; r++) {
+    const cnts = [...Array(100)].map((_, i) => rollMods(mulberry32(i + 3), r, 'weapon').length);
+    const [lo, hi] = RARITIES[r].n;
+    check(cnts.every((c) => c >= lo && c <= hi), `${RARITIES[r].name} rolls ${lo}-${hi} modifiers`);
+  }
+  const avg = (r) => { let t = 0; for (let i = 0; i < 300; i++) { const ms = rollMods(mulberry32(i + 11), r, 'weapon'); t += ms.reduce((a, m) => a + m.v / MODS[m.k].base, 0) / ms.length; } return t / 300; };
+  check(avg(5) > avg(3) && avg(3) > avg(0), 'higher rarity = stronger modifiers');
+  check(rollMods(mulberry32(1), 3, 'armour').every((m) => MODS[m.k].cats.includes('armour')) && rollMods(mulberry32(2), 2, 'weapon').every((m) => MODS[m.k].cats.includes('weapon')), 'modifier pools by category');
+  check(enchantCategory('iron_sword') === 'weapon' && enchantCategory('iron_body') === 'armour' && enchantCategory('iron_pickaxe') === 'tool' && enchantCategory('logs') === null && enchantCategory('hammer') === null, 'enchantable categories');
+  const e1 = { r: 0, mods: [{ k: 'maxhit', v: 5 }], rolls: 1 };
+  check(rollCost('iron_sword', null) === 10 && rollCost('iron_sword', e1) === 15 && rollCost('iron_sword', { ...e1, rolls: 3 }) === 34 && rollCost('iron_body', null) === 8, 'reroll cost grows x1.5 per roll');
+  check(rollCost('iron_sword', e1, true) > rollCost('iron_sword', e1, false), 'locking a modifier costs extra');
+  const locked = rollEnchant('iron_sword', mulberry32(5), { prev: { r: 2, mods: [{ k: 'crit', v: 7 }, { k: 'acc', v: 9 }], rolls: 2 }, lockIdx: 1 });
+  check(locked.mods.some((m) => m.k === 'acc' && m.v === 9) && locked.rolls === 3 && new Set(locked.mods.map((m) => m.k)).size === locked.mods.length, 'locked modifier survives a reroll without duplicates');
+  // modifier application
+  const mods = sumMods([{ r: 1, mods: [{ k: 'maxhit', v: 20 }, { k: 'speed', v: 10 }, { k: 'vs', v: 30, fam: 'beast' }, { k: 'crit', v: 5 }] }]);
+  const lv = { attack: 50, strength: 50, defence: 50, hitpoints: 50 }, base = heroCombat(lv, { weapon: 'iron_sword' }, 'aggressive'), ench = heroCombat(lv, { weapon: 'iron_sword' }, 'aggressive', mods);
+  check(ench.maxHit > base.maxHit && ench.interval < base.interval && near(mods.vs.beast, 0.3), 'enchant raises max hit and attack speed');
+  check(expectedDps(ench, MONSTERS.wolf) > expectedDps(base, MONSTERS.wolf) * 1.3 && expectedDps(ench, MONSTERS.goblin) < expectedDps(ench, MONSTERS.wolf), 'dps includes mods and family bonus');
+  const acc = heroCombat(lv, { weapon: 'iron_sword' }, 'accurate', sumMods([{ r: 0, mods: [{ k: 'acc', v: 20 }] }]));
+  check(acc.atkRoll > heroCombat(lv, { weapon: 'iron_sword' }, 'accurate').atkRoll * 1.19, 'accuracy mod raises the attack roll');
+  // game integration
+  const g = mk(11); g.data.ep = 100;
+  g.addItem('iron_sword', 1);
+  const loc = { where: 'bag', idx: g.data.bag.findIndex((s) => s.id === 'iron_sword') };
+  const r1 = g.rollEnchant(loc);
+  check(r1.ok && r1.applied && g.data.ep === 90 && g.enchOf(loc).mods.length >= 1 && g.data.pity >= 0, 'first roll costs 10 EP and applies');
+  const first = JSON.stringify(g.enchOf(loc));
+  const r2 = g.rollEnchant(loc);
+  check(r2.ok && !r2.applied && g.data.ep === 75 && JSON.stringify(g.enchOf(loc)) === first, 'reroll costs 15 and waits for Keep new / Keep old');
+  g.resolveEnchant(loc, r2.ench, false);
+  check(JSON.stringify(g.enchOf(loc)) !== first && g.enchOf(loc).rolls === 2, 'keeping the old enchant remembers the rolls (cost keeps rising)');
+  g.resolveEnchant(loc, r2.ench, true);
+  check(g.enchOf(loc).r === r2.ench.r, 'keep new applies the candidate');
+  const poor = mk(); poor.data.ep = 3; poor.addItem('iron_sword', 1);
+  check(!poor.rollEnchant({ where: 'bag', idx: poor.data.bag.length - 1 }).ok && poor.data.ep === 3, 'cannot roll without enough EP');
+  check(!g.rollEnchant({ where: 'bag', idx: g.data.bag.findIndex((s) => s.id === 'hammer') }).ok, 'cannot enchant a hammer');
+  // enchants travel with the item: bag -> equip -> bag, items with enchants do not stack, and bank keeps them
+  setLv(g, 'attack', 40);
+  const swordIdx = g.data.bag.findIndex((s) => s.id === 'iron_sword');
+  g.addItem('iron_sword', 1);
+  check(g.data.bag.filter((s) => s.id === 'iron_sword').length === 2, 'enchanted gear never stacks');
+  g.equip('iron_sword', swordIdx);
+  check(g.data.equipEnch.weapon && g.data.equipEnch.weapon.r === g.enchOf({ where: 'equip', slot: 'weapon' }).r && !g.data.bag.find((s) => s.id === 'iron_sword').e, 'equip moves the enchant with the item');
+  g.unequip('weapon');
+  const back = g.data.bag.findIndex((s) => s.e);
+  check(back >= 0 && !g.data.equipEnch.weapon, 'unequip returns it with its enchant');
+  g.deposit('iron_sword', 1, back);
+  check(g.data.bankGear.length === 1 && g.data.bankGear[0].e && g.count('iron_sword') === 1, 'bank keeps the enchanted instance');
+  g.withdrawGear(0);
+  check(g.data.bag.filter((s) => s.e).length === 1 && g.data.bankGear.length === 0, 'withdraw restores the enchant');
+  g.removeItem('iron_sword', 1);
+  check(g.data.bag.filter((s) => s.id === 'iron_sword').every((s) => s.e), 'removeItem takes plain copies first');
+  // sellSlot sells exactly one slot
+  const coins = g.data.coins; g.sellSlot(g.data.bag.findIndex((s) => s.id === 'iron_sword'), 1);
+  check(g.data.coins === coins + g.sellValue('iron_sword') && g.count('iron_sword') === 0, 'sellSlot');
+  // EP sources
+  const e = mk(); const ep0 = e.data.ep;
+  e.gain('attack', 100); // level-up(s)
+  check(e.data.ep > ep0, 'level-ups grant EP'); const ep1 = e.data.ep;
+  setLv(e, 'quarry', 1); e.data.xp.attack = xpForLevel(30); e.data.xp.strength = xpForLevel(30); e.data.xp.defence = xpForLevel(30); e.data.xp.hitpoints = xpForLevel(30);
+  e.travel('quarry'); check(e.data.ep === ep1 + 10 && e.data.visitedAreas.quarry, 'first visit to an area grants 10 EP'); e.travel('meadow'); e.travel('quarry');
+  check(e.data.ep === ep1 + 10, 'only the first visit counts');
+  const b = mk(3); const wolfA = b.ents.length; void wolfA;
+  b.data.ep = 0; b.hitMonster({ id: 'x', kind: 'alpha_wolf', x: 0, hp: 1, max: 70, dead: 0, cd: 0 }, 5);
+  check(b.data.ep >= 8, 'boss kill grants EP');
+  // enchant effects in the sim
+  const l = mk(5); l.data.equip.weapon = 'iron_sword'; l.data.equipEnch.weapon = { r: 3, rolls: 1, mods: [{ k: 'xp', v: 50 }, { k: 'drop', v: 100 }] };
+  const xp0 = l.data.xp.mining; l.gain('mining', 10);
+  const plain = mk(5); plain.gain('mining', 10);
+  check(l.data.xp.mining - xp0 > (plain.data.xp.mining - 0) * 1.4, 'XP mod boosts gains');
+  const t = mk(9); t.data.equipEnch.weapon = { r: 1, rolls: 1, mods: [{ k: 'gather', v: 50 }] }; t.data.equip.weapon = 'bronze_axe'; t.data.bag = t.data.bag.filter((s) => s.id !== 'bronze_axe');
+  check(t.toolInfo('axe')?.item.id === 'bronze_axe', 'a wielded axe still counts as the woodcutting tool');
+  // offline sim uses enchant mods
+  const o1 = mk(21), o2 = mk(21);
+  for (const o of [o1, o2]) { setLv(o, 'attack', 40); setLv(o, 'strength', 40); setLv(o, 'defence', 40); setLv(o, 'hitpoints', 40); o.data.hp = o.maxHp; o.data.equip.weapon = 'iron_sword'; o.select(o.ents.find((x) => x.kind === 'chicken').id); }
+  o2.data.equipEnch.weapon = { r: 4, rolls: 1, mods: [{ k: 'maxhit', v: 40 }, { k: 'speed', v: 30 }] };
+  const ro1 = simulateOffline(o1, 1800), ro2 = simulateOffline(o2, 1800);
+  check(ro2.kills >= ro1.kills, 'offline sim: enchanted weapon kills at least as fast');
+}
+// --- save migration v2 -> v3
+{
+  const v2 = { v: 2, name: 'V2', xp: { attack: 5000 }, equip: { weapon: 'bronze_sword', head: null }, bag: [], stance: 'aggressive' };
+  const m = migrate(v2);
+  check(m.v === 3 && m.ep === 20 && m.equipEnch && Array.isArray(m.bankGear) && m.visitedAreas.meadow && m.pity === 0 && 'boots' in m.equip && 'gloves' in m.equip, 'v2 -> v3 adds enchant fields and slots');
+  const m2 = migrate(JSON.parse(JSON.stringify(m)));
+  check(m2.ep === 20, 'migration is idempotent (no second EP gift)');
+  check(migrate({ v: 2, stance: 'weird' }).stance === 'accurate', 'unknown stance falls back');
+  const g2 = new Game(migrate({ v: 2, name: 'x', equip: { weapon: 'bronze_sword' } }));
+  check(g2.data.equip.weapon === 'bronze_sword' && g2.combat.type === 'slash' || g2.combat.type === 'stab', 'old saves load with a weapon style');
+}
+
 console.log(failed ? `\n${failed} of ${n} FAILED` : `\nall ${n} unit checks passed`);
 process.exit(failed ? 1 : 0);

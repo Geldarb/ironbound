@@ -1,7 +1,8 @@
 // Offline progress: a pure(ish) simulation of what the hero was doing while the tab was closed.
 // It works from expected values (no DOM, no timers), mutates the given Game, and returns a report for the "Welcome back" popup.
-import { MONSTERS, NODES, ITEMS, OFFLINE, SKILL_IDS, STANCE_BY_ID, isFood } from './data.js';
-import { heroHitChance, monsterHitChance } from './combat.js';
+import { MONSTERS, NODES, ITEMS, OFFLINE, SKILL_IDS, stanceXp, isFood } from './data.js';
+import { heroHitChance, monsterHitChance, expectedDps } from './combat.js';
+import { sumMods } from './enchant.js';
 import { RETREAT_FRAC } from './game.js';
 
 const RESPAWN_WAIT = 6, REGEN_PER_SEC = 0.5, CHUNK = 300;
@@ -12,7 +13,7 @@ export function simulateOffline(game, awaySeconds, opts = {}) {
   const cap = (opts.capHours ?? OFFLINE.capHours) * 3600;
   const minAway = opts.minAway ?? OFFLINE.minAway;
   const used = Math.min(awaySeconds, cap);
-  const rep = { away: awaySeconds, used, capped: awaySeconds > cap, simulated: false, activity: null, kills: 0, catches: 0, xp: {}, levels: [], items: {}, coins: 0, ate: {}, banked: 0, stopped: null };
+  const rep = { away: awaySeconds, used, capped: awaySeconds > cap, simulated: false, activity: null, kills: 0, catches: 0, ep: 0, xp: {}, levels: [], items: {}, coins: 0, ate: {}, banked: 0, stopped: null };
   const act = game.data.activity;
   if (!act || awaySeconds < minAway) return rep;
   const kind = act.type === 'monster' ? MONSTERS[act.kind] : NODES[act.kind];
@@ -36,10 +37,10 @@ export function simulateOffline(game, awaySeconds, opts = {}) {
       const chunk = Math.min(remaining, CHUNK);
       if (act.type === 'monster') {
         const m = kind, hc = game.combat, maxHp = game.maxHp;
-        const dps = (heroHitChance(hc, m) * (hc.maxHit / 2)) / hc.interval;
+        const dps = expectedDps(hc, m);
         if (dps <= 0) { rep.stopped = 'cannot hurt it'; break; }
-        const ttk = m.hp / dps, cycle = ttk + RESPAWN_WAIT;
-        const loss = Math.max(0, (monsterHitChance(hc, m) * (m.maxHit / 2) / m.interval) * ttk - RESPAWN_WAIT * REGEN_PER_SEC); // net hp lost per kill
+        const wait = m.respawn || RESPAWN_WAIT, ttk = m.hp / dps, cycle = ttk + wait;
+        const loss = Math.max(0, (monsterHitChance(hc, m) * (m.maxHit / 2) / m.interval) * ttk - wait * REGEN_PER_SEC * (1 + hc.mods.regen)); // net hp lost per kill
         const floorHp = Math.ceil(maxHp * RETREAT_FRAC);
         const foods = d.autoEat.on ? d.bag.filter((s) => isFood(s.id)).sort((a, b) => ITEMS[b.id].heal - ITEMS[a.id].heal).map((s) => ({ id: s.id, n: s.n, heal: ITEMS[s.id].heal })) : [];
         const foodHeal = foods.reduce((a, f) => a + f.n * f.heal, 0);
@@ -63,20 +64,22 @@ export function simulateOffline(game, awaySeconds, opts = {}) {
           hp = Math.min(maxHp, floorHp + Math.max(0, healed - deficit));
         }
         // xp for the damage dealt, per stance
-        const dmg = kills * m.hp, st = STANCE_BY_ID[d.stance];
-        for (const s of st.xp) game.gain(s, 4 * dmg);
+        const dmg = kills * m.hp;
+        for (const [sk, share] of stanceXp(game.stance)) game.gain(sk, 4 * dmg * share);
         game.gain('hitpoints', 1.33 * dmg);
         for (const dr of m.drops) {
           const avg = (dr.n[0] + dr.n[1]) / 2;
-          give(dr.id, stochastic(dr.p * avg * kills));
+          give(dr.id, stochastic(Math.min(1, dr.p * (1 + hc.mods.drop)) * avg * kills));
         }
         d.stats.kills += kills; rep.kills += kills;
+        const ep = stochastic(kills * ((m.epFlat || 0) + (m.epChance || 0)));
+        if (ep > 0) { game.addEp(ep, 'offline'); rep.ep += ep; }
         remaining -= kills * cycle;
       } else {
         const n = kind, tool = game.bestTool(n.tool);
         if (!tool) { rep.stopped = 'no tool'; break; }
         if (game.level(n.skill) < n.level) { rep.stopped = 'level too low'; break; }
-        const p = game.gatherChance(n), step = n.interval / (1 + 0.2 * tool.toolTier);
+        const info = game.toolInfo(n.tool), p = game.gatherChance(n), step = n.interval / (1 + 0.2 * tool.toolTier) / (1 + sumMods([info.e]).gather);
         const per = (1 / p - 1) * step + Math.max(step, n.respawn);
         let succ = Math.floor(Math.max(chunk, Math.min(remaining, per)) / per);
         if (n.bait) { const have = game.count(n.bait); if (have < succ) { succ = have; rep.stopped = 'out of bait'; } }

@@ -1,7 +1,8 @@
 // Game model: character state + the traversable-area simulation. No DOM here (the UI listens to `game.on`).
-import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood } from './data.js';
+import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood, stanceXp } from './data.js';
 import { levelForXp } from './xp.js';
 import { heroCombat, heroHitChance, monsterHitChance, combatLevel } from './combat.js';
+import { sumMods, rollEnchant, rollCost, nextPity, enchantCategory } from './enchant.js';
 
 export const TOOL_NAMES = { pickaxe: 'pickaxe', axe: 'axe', net: 'small fishing net', rod: 'fishing rod', harpoon: 'harpoon', cage: 'lobster pot', hammer: 'hammer' };
 export const WALK_SPEED = 150;
@@ -15,11 +16,13 @@ export class Game {
     this.data = data;
     this.rng = rng;
     this.listeners = [];
-    this.hero = { x: 0, dir: 1, state: 'idle', cd: 0, moving: false };
+    this.hero = { x: 0, dir: 1, state: 'idle', cd: 0, moving: false, swing: 0, hurt: 0 };
     this.target = null; // entity id
     this.ents = [];
     this.regenT = 0;
     this.eatCd = 0;
+    const d = this.data;
+    d.equipEnch ||= {}; d.bankGear ||= []; d.visitedAreas ||= { meadow: true }; d.ep ??= 0; d.pity ??= 0;
     this.data.area = AREAS[this.data.area] ? this.data.area : 'meadow';
     this.enterArea(this.data.area, AREAS[this.data.area].spawn, true);
     this.data.hp = Math.min(this.data.hp || this.maxHp, this.maxHp);
@@ -35,7 +38,7 @@ export class Game {
   get combatLevel() { return combatLevel(this.levels); }
   gain(skill, amount) {
     if (amount <= 0) return;
-    amount *= XP_RATE;
+    amount *= XP_RATE * (1 + this.mods.xp);
     const before = this.level(skill);
     this.data.xp[skill] = Math.min(200000000, (this.data.xp[skill] || 0) + amount);
     this.emit('xp', { skill, amount, x: this.hero.x });
@@ -43,17 +46,25 @@ export class Game {
     if (after > before) {
       if (skill === 'hitpoints') this.data.hp = Math.min(this.maxHp, this.data.hp + (after - before));
       this.emit('level', { skill, level: after });
+      for (let l = before + 1; l <= after; l++) this.addEp(l % 10 === 0 ? 5 : 1, `${skill} ${l}`);
     }
   }
-  get combat() { return heroCombat(this.levels, this.data.equip, this.data.stance); }
+  /** enchant modifier totals from everything worn (+ the best tool for gathering, see gatherMods) */
+  get mods() { return sumMods(Object.values(this.data.equipEnch)); }
+  get combat() { return heroCombat(this.levels, this.data.equip, this.data.stance, this.mods); }
+  /** the stance actually in force (a weapon may not offer the saved one) */
+  get stance() { return this.combat.stance; }
   setStance(id) { if (STANCE_BY_ID[id]) { this.data.stance = id; this.emit('change'); } }
+  // ---- enchant points
+  get ep() { return this.data.ep; }
+  addEp(n, why) { if (n <= 0) return; this.data.ep += n; this.emit('ep', { n, why }); }
 
   // ---- inventory
   count(id) { return this.data.bag.reduce((a, s) => a + (s.id === id ? s.n : 0), 0); }
   get slotsUsed() { return this.data.bag.length; }
   canAdd(id) { return id === 'coins' || (isStackable(id) && this.data.bag.some((s) => s.id === id)) || this.slotsUsed < BAG_SLOTS; }
   /** returns how many were added */
-  addItem(id, n = 1) {
+  addItem(id, n = 1, ench = null) {
     if (n <= 0) return 0;
     if (id === 'coins') { this.data.coins += n; return n; }
     if (isStackable(id)) {
@@ -63,25 +74,31 @@ export class Game {
       this.data.bag.push({ id, n }); return n;
     }
     let added = 0;
-    for (let i = 0; i < n && this.slotsUsed < BAG_SLOTS; i++) { this.data.bag.push({ id, n: 1 }); added++; }
+    for (let i = 0; i < n && this.slotsUsed < BAG_SLOTS; i++) { this.data.bag.push(ench ? { id, n: 1, e: ench } : { id, n: 1 }); added++; }
     return added;
   }
   removeItem(id, n = 1) {
     if (this.count(id) < n) return false;
     let left = n;
-    for (let i = this.data.bag.length - 1; i >= 0 && left > 0; i--) {
-      const s = this.data.bag[i];
-      if (s.id !== id) continue;
-      const t = Math.min(s.n, left); s.n -= t; left -= t;
-      if (s.n <= 0) this.data.bag.splice(i, 1);
+    for (const pass of [0, 1]) { // plain items first, enchanted copies last
+      for (let i = this.data.bag.length - 1; i >= 0 && left > 0; i--) {
+        const s = this.data.bag[i];
+        if (s.id !== id || (pass === 0) === !!s.e) continue;
+        const t = Math.min(s.n, left); s.n -= t; left -= t;
+        if (s.n <= 0) this.data.bag.splice(i, 1);
+      }
     }
     return true;
   }
-  bestTool(type) {
+  /** the best tool of a type: bag items and the wielded weapon (axes are weapons too). Returns { item, e } or null */
+  toolInfo(type) {
     let best = null;
-    for (const s of this.data.bag) { const it = ITEMS[s.id]; if (it?.tool === type && (!best || it.toolTier > best.toolTier)) best = it; }
+    const consider = (id, e) => { const it = ITEMS[id]; if (it?.tool === type && (!best || it.toolTier > best.item.toolTier || (it.toolTier === best.item.toolTier && e && !best.e))) best = { item: it, e }; };
+    for (const s of this.data.bag) consider(s.id, s.e);
+    consider(this.data.equip.weapon, this.data.equipEnch.weapon);
     return best;
   }
+  bestTool(type) { return this.toolInfo(type)?.item || null; }
 
   // ---- food / eating
   /** best food in the bag (highest healing) or null */
@@ -115,14 +132,24 @@ export class Game {
     if (this.level(it.req.skill) < it.req.level) return { ok: false, reason: `Requires ${it.req.skill[0].toUpperCase() + it.req.skill.slice(1)} ${it.req.level}` };
     return { ok: true };
   }
-  equip(id) {
+  /** equip an item from the bag (idx = bag slot, default: first copy). Two-handed weapons also take the shield slot. */
+  equip(id, idx = -1) {
     const c = this.canEquip(id);
     if (!c.ok) { this.toast(c.reason); return false; }
-    if (!this.removeItem(id, 1)) return false;
-    const slot = ITEMS[id].slot;
-    const old = this.data.equip[slot];
-    this.data.equip[slot] = id;
-    if (old) this.addItem(old, 1);
+    if (idx < 0 || this.data.bag[idx]?.id !== id) idx = this.data.bag.findIndex((x) => x.id === id);
+    if (idx < 0) return false;
+    const it = ITEMS[id], slot = it.slot, d = this.data;
+    const out = []; // [id, ench] pairs that have to go back to the bag
+    const old = d.equip[slot];
+    if (old) out.push([old, d.equipEnch[slot]]);
+    if (it.two && d.equip.shield) out.push([d.equip.shield, d.equipEnch.shield]);
+    if (slot === 'shield' && d.equip.weapon && ITEMS[d.equip.weapon].two) out.push([d.equip.weapon, d.equipEnch.weapon]);
+    if (this.slotsUsed - 1 + out.length > BAG_SLOTS) { this.toast('Not enough bag space'); return false; }
+    const [taken] = d.bag.splice(idx, 1);
+    if (it.two && d.equip.shield) { d.equip.shield = null; delete d.equipEnch.shield; }
+    if (slot === 'shield' && d.equip.weapon && ITEMS[d.equip.weapon].two) { d.equip.weapon = null; delete d.equipEnch.weapon; }
+    d.equip[slot] = id; if (taken.e) d.equipEnch[slot] = taken.e; else delete d.equipEnch[slot];
+    for (const [oid, oe] of out) this.addItem(oid, 1, oe);
     this.emit('change');
     return true;
   }
@@ -130,7 +157,8 @@ export class Game {
     const id = this.data.equip[slot];
     if (!id) return false;
     if (this.slotsUsed >= BAG_SLOTS) { this.toast('Bag is full'); return false; }
-    this.data.equip[slot] = null; this.addItem(id, 1);
+    const e = this.data.equipEnch[slot];
+    this.data.equip[slot] = null; delete this.data.equipEnch[slot]; this.addItem(id, 1, e);
     this.emit('change');
     return true;
   }
@@ -144,6 +172,14 @@ export class Game {
     this.removeItem(id, n); this.data.coins += n * this.sellValue(id);
     this.emit('change'); return n;
   }
+  /** sell the bag slot at index i (use this for gear so enchanted copies are not sold by accident) */
+  sellSlot(i, n = 1) {
+    const s = this.data.bag[i];
+    if (!s || s.id === 'coins') return 0;
+    n = Math.min(n, s.n); s.n -= n; this.data.coins += n * this.sellValue(s.id);
+    if (s.n <= 0) this.data.bag.splice(i, 1);
+    this.emit('change'); return n;
+  }
   buy(id) {
     if (!SHOP_BUY.includes(id)) return false;
     const price = ITEMS[id].value;
@@ -151,7 +187,10 @@ export class Game {
     if (!this.canAdd(id)) { this.toast('Bag is full'); return false; }
     this.data.coins -= price; this.addItem(id, 1); this.emit('change'); return true;
   }
-  deposit(id, n = 1) {
+  deposit(id, n = 1, idx = -1) {
+    if (idx >= 0 && this.data.bag[idx]?.id === id && this.data.bag[idx].e) { // enchanted gear is banked as its own instance
+      const [s] = this.data.bag.splice(idx, 1); this.data.bankGear.push({ id, e: s.e }); this.emit('change'); return 1;
+    }
     n = Math.min(n, this.count(id));
     if (n <= 0) return 0;
     this.removeItem(id, n); this.data.bank[id] = (this.data.bank[id] || 0) + n; this.emit('change'); return n;
@@ -163,6 +202,39 @@ export class Game {
     if (!got) { this.toast('Bag is full'); return 0; }
     this.data.bank[id] -= got; if (this.data.bank[id] <= 0) delete this.data.bank[id];
     this.emit('change'); return got;
+  }
+  withdrawGear(i) {
+    const g = this.data.bankGear[i];
+    if (!g) return false;
+    if (!this.addItem(g.id, 1, g.e)) { this.toast('Bag is full'); return false; }
+    this.data.bankGear.splice(i, 1); this.emit('change'); return true;
+  }
+
+  // ---- enchanting. loc = { where: 'bag', idx } | { where: 'equip', slot }
+  enchOf(loc) { return loc.where === 'bag' ? this.data.bag[loc.idx]?.e || null : this.data.equipEnch[loc.slot] || null; }
+  idOf(loc) { return loc.where === 'bag' ? this.data.bag[loc.idx]?.id : this.data.equip[loc.slot]; }
+  setEnch(loc, e) {
+    if (loc.where === 'bag') { const s = this.data.bag[loc.idx]; if (e) s.e = e; else delete s.e; }
+    else if (e) this.data.equipEnch[loc.slot] = e; else delete this.data.equipEnch[loc.slot];
+  }
+  /** spend EP and roll. A fresh item gets the result immediately; an enchanted one returns a candidate to keep or discard. */
+  rollEnchant(loc, lockIdx = -1) {
+    const id = this.idOf(loc), cur = this.enchOf(loc);
+    if (!enchantCategory(id)) return { ok: false, reason: 'This cannot be enchanted' };
+    const cost = rollCost(id, cur, cur && lockIdx >= 0);
+    if (this.data.ep < cost) return { ok: false, reason: `Need ${cost} Enchant Points` };
+    this.data.ep -= cost;
+    const cand = rollEnchant(id, this.rng, { pity: this.data.pity, prev: cur, lockIdx: cur ? lockIdx : -1 });
+    this.data.pity = nextPity(this.data.pity, cand.r);
+    if (!cur) { this.setEnch(loc, cand); this.emit('change'); return { ok: true, cost, applied: true, ench: cand }; }
+    this.emit('change');
+    return { ok: true, cost, applied: false, ench: cand, old: cur };
+  }
+  /** keep the candidate (keepNew) or the old enchant; either way the item remembers how many rolls were spent on it */
+  resolveEnchant(loc, cand, keepNew) {
+    const cur = this.enchOf(loc);
+    if (keepNew) this.setEnch(loc, cand); else if (cur) cur.rolls = cand.rolls;
+    this.emit('change');
   }
 
   // ---- crafting (furnace / anvil). Stations must have been visited (tapped in the world) once.
@@ -214,6 +286,7 @@ export class Game {
     if (!this.areaUnlocked(areaId)) { this.toast(`${AREAS[areaId].name} needs combat level ${AREAS[areaId].req.combat}`); return false; }
     this.enterArea(areaId, x ?? AREAS[areaId].spawn);
     this.toast(`Arrived: ${AREAS[areaId].name}`);
+    if (!this.data.visitedAreas[areaId]) { this.data.visitedAreas[areaId] = true; this.addEp(10, `first visit to ${AREAS[areaId].name}`); this.toast('First visit: +10 Enchant Points'); }
     return true;
   }
   ent(id) { return this.ents.find((e) => e.id === id) || null; }
@@ -243,6 +316,7 @@ export class Game {
     dt = Math.min(dt, 0.25);
     const h = this.hero;
     for (const e of this.ents) {
+      if (e.swing > 0) e.swing -= dt;
       if (e.dead > 0) {
         e.dead -= dt;
         if (e.dead <= 0) { e.dead = 0; if (e.type === 'monster') e.hp = e.max; }
@@ -250,6 +324,8 @@ export class Game {
     }
     if (h.cd > 0) h.cd -= dt;
     if (this.eatCd > 0) this.eatCd -= dt;
+    if (h.swing > 0) h.swing -= dt;
+    if (h.hurt > 0) h.hurt -= dt;
     let engaged = false;
     const t = this.targetEnt;
     const moveTo = (x) => {
@@ -258,8 +334,7 @@ export class Game {
       h.dir = Math.sign(d); h.x += h.dir * Math.min(Math.abs(d), WALK_SPEED * dt); h.state = 'walk'; return false;
     };
     if (t) {
-      const reach = REACH[t.type];
-      const stand = t.x - h.dir * 0 ; // hero stands on the side he approaches from
+      const reach = REACH[t.type] + (t.type === 'monster' ? this.combat.reach : 0);
       const side = h.x <= t.x ? -1 : 1;
       const tx = t.x + side * (reach - 6);
       if (t.dead > 0) { h.state = 'idle'; }
@@ -269,9 +344,8 @@ export class Game {
         if (t.type === 'monster') engaged = this.fight(t, dt);
         else if (t.type === 'node') this.gather(t, dt);
         else if (t.type === 'station') { this.data.visited[t.kind] = true; this.target = null; h.state = 'idle'; this.emit('station', { kind: t.kind }); this.emit('target'); }
-        else if (t.type === 'sign') { this.target = null; h.state = 'idle'; this.travel(t.kind, t.kind === 'meadow' ? AREAS.meadow.width - 220 : AREAS[t.kind].spawn); }
+        else if (t.type === 'sign') { this.target = null; h.state = 'idle'; const back = AREAS[t.kind].entities.find((e) => e[0] === 'sign' && e[1] === this.data.area), from = this.data.area; if (this.travel(t.kind, back ? back[2] + (back[2] < AREAS[t.kind].width / 2 ? 110 : -110) : undefined)) this.hero.dir = back && back[2] > AREAS[t.kind].width / 2 ? -1 : 1; void from; }
       }
-      void stand;
     } else if (h.dest != null) {
       if (moveTo(h.dest)) { h.dest = null; h.state = 'idle'; }
     } else if (h.state === 'walk') h.state = 'idle';
@@ -279,7 +353,7 @@ export class Game {
     // regeneration when not in a fight
     if (!engaged && this.data.hp < this.maxHp) {
       this.regenT += dt;
-      if (this.regenT >= REGEN_EVERY) { this.regenT = 0; this.data.hp = Math.min(this.maxHp, this.data.hp + 1); this.emit('hp'); }
+      if (this.regenT >= REGEN_EVERY / (1 + this.mods.regen)) { this.regenT = 0; this.data.hp = Math.min(this.maxHp, this.data.hp + 1); this.emit('hp'); }
     } else if (engaged) this.regenT = 0;
   }
 
@@ -287,18 +361,26 @@ export class Game {
     const h = this.hero, def = MONSTERS[m.kind], hc = this.combat;
     h.state = 'attack';
     if (h.cd <= 0) {
-      h.cd = hc.interval;
+      h.cd = hc.interval; h.swing = Math.min(0.45, hc.interval * 0.6);
+      this.emit('swing', { kind: ITEMS[this.data.equip.weapon]?.wk || 'unarmed', type: hc.type, two: hc.two });
       const hit = this.rng() < heroHitChance(hc, def);
-      const dmg = hit ? Math.floor(this.rng() * (hc.maxHit + 1)) : 0;
-      this.hitMonster(m, dmg);
+      let dmg = hit ? Math.floor(this.rng() * (hc.maxHit + 1)) : 0;
+      const mods = hc.mods;
+      if (dmg > 0 && mods.vs[def.family]) dmg = Math.round(dmg * (1 + mods.vs[def.family]));
+      let crit = false;
+      if (dmg > 0 && mods.crit && this.rng() < mods.crit) { dmg = Math.ceil(dmg * 1.5); crit = true; }
+      this.hitMonster(m, dmg, { crit });
+      if (dmg > 0 && mods.lifesteal && this.data.hp < this.maxHp) { const n = Math.min(this.maxHp - this.data.hp, Math.max(1, Math.round(dmg * mods.lifesteal))); this.data.hp += n; this.emit('heal', { x: h.x, n, id: 'lifesteal' }); }
+      if (hit && m.hp > 0 && mods.burn && this.rng() < mods.burn) this.hitMonster(m, Math.ceil(hc.maxHit / 3), { burn: true });
       if (m.dead > 0) return false;
     }
     m.cd -= dt;
     if (m.cd <= 0 && m.dead <= 0) {
-      m.cd = def.interval;
+      m.cd = def.interval; m.swing = 0.3;
       const hit = this.rng() < monsterHitChance(hc, def);
       const dmg = hit ? Math.floor(this.rng() * (def.maxHit + 1)) : 0;
       this.data.hp = Math.max(0, this.data.hp - dmg);
+      if (dmg > 0) h.hurt = 0.3;
       this.emit('hit', { who: 'hero', x: h.x, dmg, miss: dmg === 0 });
       if (this.data.hp <= 0) { this.die(); return false; }
       this.tryAutoEat();
@@ -307,32 +389,34 @@ export class Game {
     }
     return true;
   }
-  hitMonster(m, dmg) {
+  hitMonster(m, dmg, o = {}) {
     const def = MONSTERS[m.kind];
     const real = Math.min(dmg, m.hp); // xp is for damage actually dealt (no overkill xp)
     m.hp = Math.max(0, m.hp - dmg);
-    this.emit('hit', { who: 'monster', id: m.id, x: m.x, dmg, miss: dmg === 0 });
+    this.emit('hit', { who: 'monster', id: m.id, x: m.x, dmg, miss: dmg === 0, crit: !!o.crit, burn: !!o.burn });
     if (real > 0) {
-      const st = STANCE_BY_ID[this.data.stance];
-      for (const s of st.xp) this.gain(s, 4 * real);
+      for (const [s, share] of stanceXp(this.stance)) this.gain(s, 4 * real * share);
       this.gain('hitpoints', 1.33 * real);
     }
     if (m.hp <= 0) {
-      m.dead = 6; this.data.stats.kills++;
-      this.emit('kill', { id: m.id, kind: m.kind });
+      m.dead = def.respawn || 6; this.data.stats.kills++;
+      this.emit('kill', { id: m.id, kind: m.kind, x: m.x });
+      const dropMod = 1 + this.mods.drop;
       for (const d of def.drops) {
-        if (this.rng() >= d.p) continue;
+        if (this.rng() >= Math.min(1, d.p * dropMod)) continue;
         const n = d.n[0] + Math.floor(this.rng() * (d.n[1] - d.n[0] + 1));
         const got = this.addItem(d.id, n);
         if (got) this.emit('loot', { id: d.id, n: got, x: m.x });
         else this.toast('Bag is full - loot lost');
       }
+      if (def.epFlat) { this.addEp(def.epFlat, def.name); this.toast(`${def.name} defeated: +${def.epFlat} Enchant Points`); }
+      else if (def.epChance && this.rng() < def.epChance) { this.addEp(1, 'kill'); this.emit('floatep', { x: m.x }); }
       this.emit('change');
     }
   }
   die() {
     this.toast('Oh dear, you died! Back to the start.');
-    this.emit('die');
+    this.emit('die', { x: this.hero.x });
     this.data.hp = this.maxHp;
     const a = AREAS[this.data.area];
     this.enterArea(this.data.area, a.spawn);
@@ -343,12 +427,13 @@ export class Game {
   availableYields(n) { const lv = this.level(n.skill); return nodeYields(n).filter((y) => y.level <= lv); }
   gather(e, dt) {
     const h = this.hero, n = NODES[e.kind];
-    const tool = this.bestTool(n.tool);
+    const info = this.toolInfo(n.tool), tool = info?.item;
     if (!tool) { this.toast(`You need a ${TOOL_NAMES[n.tool] || n.tool}`); this.clearTarget(); return; }
     if (n.bait && !this.count(n.bait)) { this.toast(`Out of ${ITEMS[n.bait].name.toLowerCase()}`); this.clearTarget(); return; }
     h.state = 'gather';
     if (h.cd > 0) return;
-    h.cd = n.interval / (1 + 0.2 * tool.toolTier);
+    h.cd = n.interval / (1 + 0.2 * tool.toolTier) / (1 + sumMods([info.e]).gather); h.swing = 0.4;
+    this.emit('swing', { kind: n.tool, gather: true });
     if (this.rng() < this.gatherChance(n)) {
       const ys = this.availableYields(n), y = ys[Math.floor(this.rng() * ys.length)];
       const got = this.addItem(y.item, 1);
