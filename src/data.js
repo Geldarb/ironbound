@@ -9,6 +9,7 @@ export const SKILLS = [
   { id: 'woodcutting', name: 'Woodcutting', color: '#7a9a3a', short: 'Wdc' },
   { id: 'fishing', name: 'Fishing', color: '#4aa3e8', short: 'Fis' },
   { id: 'cooking', name: 'Cooking', color: '#e8a33a', short: 'Coo' },
+  { id: 'prayer', name: 'Prayer', color: '#c9a227', short: 'Pra' },
 ];
 /** Global XP multiplier applied to every XP gain (combat + gathering + crafting). The level table itself is the real RuneScape one,
  *  so changing this never changes anyone's stored level. Single tunable: 3 => level 2 in ~3 chicken kills, level 10 in a few minutes. */
@@ -18,6 +19,23 @@ export const OFFLINE = { minAway: 60, capHours: 3, efficiency: 0.5 };
 export const SKILL_IDS = SKILLS.map((s) => s.id);
 export const SKILL_BY_ID = Object.fromEntries(SKILLS.map((s) => [s.id, s]));
 export const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
+
+// ---- Prayer. Points drain while a prayer is active. Bones are buried for XP.
+export const PRAYERS = [
+  { id: 'thick_skin', name: 'Thick Skin', level: 1, drain: 0.4, blurb: '+5% Defence' },
+  { id: 'burst_of_strength', name: 'Burst of Strength', level: 4, drain: 0.4, blurb: '+5% Strength' },
+  { id: 'clarity_of_thought', name: 'Clarity of Thought', level: 7, drain: 0.4, blurb: '+5% Attack' },
+  { id: 'rock_skin', name: 'Rock Skin', level: 10, drain: 0.6, blurb: '+10% Defence' },
+  { id: 'superhuman_strength', name: 'Superhuman Strength', level: 13, drain: 0.6, blurb: '+10% Strength' },
+  { id: 'improved_reflexes', name: 'Improved Reflexes', level: 16, drain: 0.6, blurb: '+10% Attack' },
+];
+export const PRAYER_BY_ID = Object.fromEntries(PRAYERS.map((p) => [p.id, p]));
+/** Bone types: base XP when buried anywhere, altar XP (bonus), and EP chance per bone when used at the prayer altar. */
+export const BONES = {
+  bones: { name: 'Bones', xp: 4.5, altarXp: 9, epChance: 0.15, epFlat: 0 },
+  big_bones: { name: 'Big bones', xp: 15, altarXp: 30, epChance: 0.35, epFlat: 1 },
+};
+export const BONE_XP = Object.fromEntries(Object.entries(BONES).map(([k, v]) => [k, v.xp]));
 
 // ---- combat styles (melee). `bonus` = which effective level gets +3; `xp` = skills that get the 4 xp per damage.
 export const STANCES = [
@@ -99,6 +117,7 @@ add('runite_ore', { name: 'Runite ore', stack: true, value: 300, art: 'ore', c: 
 add('logs', { name: 'Logs', stack: true, value: 4, art: 'log', c: '#b9824a' });
 add('oak_logs', { name: 'Oak logs', stack: true, value: 10, art: 'log', c: '#9a6a3a' });
 add('bones', { name: 'Bones', stack: true, value: 1, art: 'bones', c: '#f3ead2' });
+add('big_bones', { name: 'Big bones', stack: true, value: 8, art: 'bones', c: '#e8dcc0' });
 add('feather', { name: 'Feather', stack: true, value: 2, art: 'feather', c: '#ffffff' });
 add('wolf_pelt', { name: 'Wolf pelt', stack: true, value: 18, art: 'pelt', c: '#8a8f98' });
 for (const [i, t] of TIERS.entries()) add(TIER_BAR[i], { name: `${t.name} bar`, stack: true, value: [10, 24, 50, 100, 200, 600][i], art: 'bar', c: t.color });
@@ -175,6 +194,7 @@ export const STATIONS = {
   furnace: { name: 'Furnace', menu: 'Smelting', blurb: 'Smelt ore into bars.' },
   anvil: { name: 'Anvil', menu: 'Smithing', blurb: 'Hammer bars into gear. Needs a hammer.' },
   altar: { name: 'Enchanting altar', short: 'Altar', menu: 'Enchanting', blurb: 'Spend Enchant Points to roll random enchantments.' },
+  prayer_altar: { name: 'Prayer altar', short: 'Prayer', menu: 'Prayer', blurb: 'Bury bones here for bonus Prayer XP and a chance of Enchant Points.' },
   bank: { name: 'Bank chest', short: 'Bank', menu: 'Bank' },
   store: { name: 'General store', menu: 'Shop' },
 };
@@ -192,7 +212,7 @@ export const MONSTERS = {
   alpha_wolf: { name: 'Alpha wolf', level: 38, hp: 70, atk: 35, def: 30, maxHit: 8, interval: 1.8, color: '#4a4f5a', family: 'beast', defB: { stab: 30, slash: 20, crush: 40 }, boss: true, respawn: 45, epFlat: 8, epChance: 0,
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'wolf_pelt', p: 1, n: [1, 2] }, { id: 'coins', p: 1, n: [60, 160] }, { id: 'iron_2h', p: 0.15, n: [1, 1] }, { id: 'iron_longsword', p: 0.15, n: [1, 1] }, { id: 'steel_scimitar', p: 0.06, n: [1, 1] }] },
   hill_giant: { name: 'Hill giant', level: 28, hp: 40, atk: 25, def: 25, maxHit: 7, interval: 2.1, color: '#c9a27a', family: 'giant', defB: { stab: 25, slash: 30, crush: 0 }, epChance: 0.2,
-    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.9, n: [20, 80] }, { id: 'steel_sword', p: 0.03, n: [1, 1] }, { id: 'steel_warhammer', p: 0.03, n: [1, 1] }, { id: 'steel_2h', p: 0.02, n: [1, 1] }, { id: 'steel_halberd', p: 0.02, n: [1, 1] }, { id: 'iron_battleaxe', p: 0.04, n: [1, 1] }, { id: 'coal', p: 0.3, n: [1, 3] }] },
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'big_bones', p: 0.15, n: [1, 1] }, { id: 'coins', p: 0.9, n: [20, 80] }, { id: 'steel_sword', p: 0.03, n: [1, 1] }, { id: 'steel_warhammer', p: 0.03, n: [1, 1] }, { id: 'steel_2h', p: 0.02, n: [1, 1] }, { id: 'steel_halberd', p: 0.02, n: [1, 1] }, { id: 'iron_battleaxe', p: 0.04, n: [1, 1] }, { id: 'coal', p: 0.3, n: [1, 3] }] },
 };
 // ---- resource nodes. chance = base success per attempt at the required level (+1.2% per level above, capped 90%).
 export const NODES = {
@@ -224,7 +244,7 @@ export const nodeYields = (n) => n.yields || [{ item: n.item, level: n.level, xp
 export const AREAS = {
   meadow: {
     name: 'Starter Meadow', width: 2300, spawn: 160, req: { combat: 1 }, sky: ['#bfe8ff', '#e8f7ff'], hill: ['#8fd48a', '#6fbf6a'], ground: '#59b857',
-    entities: [['station', 'altar', 225], ['station', 'bank', 300], ['station', 'store', 430], ['station', 'range', 520], ['station', 'furnace', 610], ['station', 'anvil', 720],
+    entities: [['station', 'altar', 225], ['station', 'prayer_altar', 280], ['station', 'bank', 300], ['station', 'store', 430], ['station', 'range', 520], ['station', 'furnace', 610], ['station', 'anvil', 720],
       ['node', 'pond', 830], ['node', 'tree', 930], ['node', 'tree', 1020], ['station', 'fire', 1100], ['node', 'copper', 1190], ['node', 'tin', 1270],
       ['monster', 'chicken', 1430], ['monster', 'chicken', 1510], ['monster', 'cow', 1650], ['monster', 'cow', 1730], ['monster', 'goblin', 1870], ['monster', 'goblin', 1960], ['sign', 'quarry', 2190]],
   },
