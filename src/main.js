@@ -6,6 +6,7 @@ import { drawHero } from './art.js';
 import { $ } from './dom.js';
 import { simulateOffline } from './offline.js';
 import { OFFLINE } from './data.js';
+import { xpForLevel } from './xp.js';
 
 let game = null, scene = null, ui = null, raf = 0, saveT = 0;
 
@@ -31,7 +32,7 @@ function start(data) {
   } else { scene.g = game; scene.look = data.look; scene.floaters = []; }
   ui = new UI(game, resetCharacter); ui.onSheet = (o) => { scene.sheetOpen = o; };
   game.on((t, p) => { scene.onEvent(t, p); if (t === 'level' || t === 'die' || t === 'area') persist(); });
-  window.__ib = { game, scene, ui, catchUp };
+  window.__ib = { game, scene, ui, catchUp, xpForLevel };
   $('create').hidden = true;
   scene.resize();
   ui.updateTarget();

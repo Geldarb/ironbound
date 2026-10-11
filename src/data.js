@@ -145,8 +145,7 @@ for (const [i, t] of TIERS.entries()) {
     const bonus = { atk: 0, str: 0, def: 0, a: { stab: 0, slash: 0, crush: 0 } };
     if (w) { for (const ty of DMG_TYPES) bonus.a[ty] = Math.round(ATKB[i] * w.a[ty]); bonus.atk = Math.max(...DMG_TYPES.map((ty) => bonus.a[ty])); bonus.str = Math.round(STRB[i] * w.str); }
     else if (ARMOUR[kind]) bonus.def = ARMOUR[kind][i];
-    const it = { name: `${t.name} ${kind === 'pickaxe' ? 'pickaxe' : k.name.toLowerCase().replace(/^med |^plate |^kite/, (m) => m)}`, kind, tier: i, bonus, value: Math.round((8 + k.bars * 10) * (1 + i * 1.6)), art: k.art, c: t.color, d: t.dark };
-    it.name = kind === 'axe' ? `${t.name} axe` : kind === 'pickaxe' ? `${t.name} pickaxe` : `${t.name} ${k.name.charAt(0).toLowerCase()}${k.name.slice(1)}`;
+    const it = { name: `${t.name} ${k.name.toLowerCase()}`, kind, tier: i, bonus, value: Math.round((8 + k.bars * 10) * (1 + i * 1.6)), art: k.art, c: t.color, d: t.dark };
     if (k.slot) { it.slot = k.slot; it.req = { skill: w ? 'attack' : 'defence', level: t.req }; }
     if (w) { it.interval = w.interval; it.two = !!w.two; it.reach = w.reach || 0; it.wk = kind; }
     if (k.tool) { it.tool = k.tool; it.toolTier = i; }

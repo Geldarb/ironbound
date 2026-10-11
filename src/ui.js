@@ -3,7 +3,7 @@ import { SKILLS, SKILL_BY_ID, STANCES, SLOTS, ITEMS, NODES, MONSTERS, AREAS, ARE
 import { levelProgress, xpForLevel } from './xp.js';
 import { RARITIES, rarityOf, modText, rollCost, enchantCategory, isEnchantable, PITY_EPIC } from './enchant.js';
 import { heroHitChance, weaponKind } from './combat.js';
-import { iconURL } from './art.js';
+import { iconURL, tabIcon } from './art.js';
 import { $, el, esc, fmt, setText } from './dom.js';
 
 const NAV = [
@@ -45,7 +45,7 @@ export class UI {
   buildNav() {
     const nav = $('nav'); nav.innerHTML = '';
     for (const n of NAV) {
-      const b = el('button', '', `<span class="i">${n.i}</span>${n.t}`); b.dataset.tab = n.id; b.setAttribute('aria-label', n.t);
+      const b = el('button', '', `<img class="ti" alt="" src="${tabIcon(n.id)}">${n.t}`); b.dataset.tab = n.id; b.setAttribute('aria-label', n.t);
       b.onclick = () => (this.sheet === n.id && !this.mode.bank && !this.mode.shop ? this.close() : this.open(n.id));
       nav.appendChild(b);
     }
@@ -276,13 +276,13 @@ export class UI {
       const lockCost = cur ? rollCost(id, cur, true) : 0, cost = rollCost(id, cur, false);
       const lockIdx = A.cand ? -1 : A.lock;
       const need = lockIdx >= 0 ? lockCost : cost;
-      const panel = el('div', 'enchBox big', `<div class="nm" style="display:flex;gap:8px;align-items:center">${img(id)}<b${rc ? ` style="color:${rc.color}"` : ''}>${esc(it.name)}</b><small style="margin-left:auto;color:var(--dim)">${enchantCategory(id)}</small></div>
+      const panel = el('div', 'enchBox eb', `<div class="nm" style="display:flex;gap:8px;align-items:center">${img(id)}<b${rc ? ` style="color:${rc.color}"` : ''}>${esc(it.name)}</b><small style="margin-left:auto;color:var(--dim)">${enchantCategory(id)}</small></div>
         ${cur ? `<div class="mods">${cur.mods.map((m, i) => `<label class="mod"><input type="radio" name="lock" value="${i}" ${A.lock === i ? 'checked' : ''} ${A.cand ? 'disabled' : ''}> <span style="color:${rc.color}">${modText(m)}</span></label>`).join('')}<label class="mod"><input type="radio" name="lock" value="-1" ${A.lock < 0 ? 'checked' : ''} ${A.cand ? 'disabled' : ''}> <span style="color:var(--dim)">no lock</span></label></div>
         <div class="note">${rc.name} · ${cur.rolls} roll${cur.rolls === 1 ? '' : 's'} so far. Lock one modifier to keep it for +${lockCost - cost} EP.</div>` : '<div class="note">Not enchanted yet. The first roll applies immediately.</div>'}`);
       panel.style.borderColor = rc ? rc.color : 'var(--line)'; panel.dataset.altarItem = id;
       if (A.cand) {
         const cc = RARITIES[A.cand.r];
-        const cand = el('div', 'enchBox big', `<b style="color:${cc.color}">New roll: ${cc.name}</b>${A.cand.mods.map((m) => `<div style="color:${cc.color}">${modText(m)}</div>`).join('')}<div class="btns" style="margin-top:6px"><button class="btn gold" id="keepNew" style="flex:1">Keep new</button><button class="btn" id="keepOld" style="flex:1">Keep old</button></div>`);
+        const cand = el('div', 'enchBox eb', `<b style="color:${cc.color}">New roll: ${cc.name}</b>${A.cand.mods.map((m) => `<div style="color:${cc.color}">${modText(m)}</div>`).join('')}<div class="btns" style="margin-top:6px"><button class="btn gold" id="keepNew" style="flex:1">Keep new</button><button class="btn" id="keepOld" style="flex:1">Keep old</button></div>`);
         cand.style.borderColor = cc.color; cand.dataset.cand = '1';
         cand.querySelector('#keepNew').onclick = () => { g.resolveEnchant(A.loc, A.cand, true); A.cand = null; A.lock = -1; this.renderSheet(); };
         cand.querySelector('#keepOld').onclick = () => { g.resolveEnchant(A.loc, A.cand, false); A.cand = null; this.renderSheet(); };

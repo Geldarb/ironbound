@@ -361,7 +361,7 @@ export class Game {
     const h = this.hero, def = MONSTERS[m.kind], hc = this.combat;
     h.state = 'attack';
     if (h.cd <= 0) {
-      h.cd = hc.interval; h.swing = Math.min(0.45, hc.interval * 0.6);
+      h.cd = hc.interval; h.swing = h.swingDur = Math.min(0.45, hc.interval * 0.6);
       this.emit('swing', { kind: ITEMS[this.data.equip.weapon]?.wk || 'unarmed', type: hc.type, two: hc.two });
       const hit = this.rng() < heroHitChance(hc, def);
       let dmg = hit ? Math.floor(this.rng() * (hc.maxHit + 1)) : 0;
@@ -432,8 +432,8 @@ export class Game {
     if (n.bait && !this.count(n.bait)) { this.toast(`Out of ${ITEMS[n.bait].name.toLowerCase()}`); this.clearTarget(); return; }
     h.state = 'gather';
     if (h.cd > 0) return;
-    h.cd = n.interval / (1 + 0.2 * tool.toolTier) / (1 + sumMods([info.e]).gather); h.swing = 0.4;
-    this.emit('swing', { kind: n.tool, gather: true });
+    h.cd = n.interval / (1 + 0.2 * tool.toolTier) / (1 + sumMods([info.e]).gather); h.swing = h.swingDur = 0.45;
+    this.emit('swing', { kind: n.tool, gather: true, x: e.x, node: e.kind });
     if (this.rng() < this.gatherChance(n)) {
       const ys = this.availableYields(n), y = ys[Math.floor(this.rng() * ys.length)];
       const got = this.addItem(y.item, 1);
