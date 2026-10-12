@@ -588,7 +588,7 @@ export class Game {
   // ---- crafting (furnace / anvil). Stations must have been visited (tapped in the world) once.
   stationVisited(st) { return st === 'cook' ? !!(this.data.visited.fire || this.data.visited.range) : !!this.data.visited[st]; }
   recipeStatus(r) {
-    if (!this.stationVisited(r.station)) return { ok: false, reason: r.station === 'cook' ? 'Visit a campfire or range first' : `Visit the ${STATIONS[r.station].name} first` };
+    if (!this.stationVisited(r.station) && r.station !== 'fletch' && r.station !== 'craft') return { ok: false, reason: r.station === 'cook' ? 'Visit a campfire or range first' : `Visit the ${STATIONS[r.station]?.name || r.station} first` };
     const sk = r.skill || 'smithing';
     if (this.level(sk) < r.level) return { ok: false, reason: `${sk[0].toUpperCase() + sk.slice(1)} ${r.level}` };
     if (r.station === 'anvil' && !this.count('hammer')) return { ok: false, reason: 'Needs a hammer' };

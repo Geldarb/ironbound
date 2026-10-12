@@ -160,6 +160,11 @@ export class UI {
   r_prayer(b) {
     const g = this.g;
     b.appendChild(el('div', 'row', `<div class="tx"><b>Prayer points ${g.prayerPoints}/${g.maxPrayer}</b><small>Bury bones for XP. Activate prayers below.</small></div>`));
+    const restoreBtn = el('button', 'btn gold', 'Restore prayer points');
+    restoreBtn.style.margin = '6px 0';
+    restoreBtn.disabled = g.prayerPoints >= g.maxPrayer;
+    restoreBtn.onclick = () => { g.restorePrayer(); this.renderSheet(); };
+    b.appendChild(restoreBtn);
     for (const p of PRAYERS) {
       const on = g.data.activePrayers.includes(p.id);
       const can = g.level('prayer') >= p.level;
@@ -167,7 +172,20 @@ export class UI {
       r.querySelector('button').onclick = () => g.togglePrayer(p.id);
       b.appendChild(r);
     }
-    b.appendChild(el('div', 'note', 'Offer bones at the Prayer altar for bonus XP and Enchant Points.'));
+    b.appendChild(el('div', 'note', '<b>Offer bones</b> for bonus Prayer XP and Enchant Points'));
+    const boneIds = Object.keys(BONES).filter((id) => g.count(id) > 0);
+    if (!boneIds.length) {
+      b.appendChild(el('p', 'note', 'No bones in your bag. Kill monsters to collect them.'));
+    } else {
+      for (const id of boneIds) {
+        const bdef = BONES[id], n = g.count(id);
+        const r = el('div', 'row', `${img(id)}<div class="tx"><b>${esc(bdef.name)} x${n}</b><small>Altar: +${bdef.altarXp} Prayer · ${Math.round(bdef.epChance * 100)}% EP chance${bdef.epFlat ? ` +${bdef.epFlat} EP` : ''}</small></div><div class="btns"><button class="btn sm" data-n="1">1</button>${n >= 5 ? '<button class="btn sm" data-n="5">5</button>' : ''}${n > 1 ? `<button class="btn sm gold" data-n="${n}">All</button>` : ''}</div>`);
+        r.querySelectorAll('[data-n]').forEach((x) => {
+          x.onclick = () => { g.buryAtAltar(id, Number(x.dataset.n)); this.renderSheet(); };
+        });
+        b.appendChild(r);
+      }
+    }
   }
   r_magic(b) {
     const g = this.g;
