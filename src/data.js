@@ -65,6 +65,7 @@ export const SLAYER_TASKS = [
   { id: 'bats', name: 'Bats', monsters: ['bat'], amount: [12, 25], level: 5, xp: 12 },
   { id: 'dragons', name: 'Green dragons', monsters: ['green_dragon'], amount: [3, 8], level: 40, xp: 120 },
 ];
+export const SLAYER_MASTER = { name: 'Turael', blurb: 'Assigns Slayer tasks. Complete them for bonus XP and coins.' };
 export const SPELLS = [
   { id: 'wind_strike', name: 'Wind Strike', level: 1, runes: { air_rune: 1, mind_rune: 1 }, maxHit: 2, xp: 5.5, blurb: 'Basic air spell' },
   { id: 'water_strike', name: 'Water Strike', level: 5, runes: { water_rune: 1, air_rune: 1, mind_rune: 1 }, maxHit: 4, xp: 7.5, blurb: 'Water spell' },
