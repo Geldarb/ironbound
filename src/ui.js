@@ -157,6 +157,7 @@ export class UI {
     c.querySelector('#tanHard').onclick = () => { g.tanHide('hard'); this.closeModal(); };
     c.querySelector('#tanX').onclick = () => this.closeModal();
   }
+  r_prayer(b) {
     const g = this.g;
     b.appendChild(el('div', 'row', `<div class="tx"><b>Prayer altar</b><small>Offer bones here for double Prayer XP and a chance of Enchant Points.</small></div>`));
     b.appendChild(el('div', 'note', `Prayer points ${g.prayerPoints}/${g.maxPrayer} · ✨ ${g.ep} EP`));
