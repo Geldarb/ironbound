@@ -113,7 +113,8 @@ export const SLOTS = [
 ];
 export const SLOT_IDS = SLOTS.map((s) => s.id);
 
-// Demo pacing: attack intervals are shorter than RuneScape's 2.4s (a 'tick' is 0.3s here).
+// Equipment bonuses (OSRS-style). atk/str/def are generic; a is per damage type.
+const BONUS = (atk = 0, str = 0, def = 0, a = {}) => ({ atk, str, def, a });
 // per-tier base tables (index = tier). Weapon stats = base * the kind's multipliers.
 const ATKB = [4, 7, 11, 16, 22, 38], STRB = [5, 7, 11, 16, 22, 39];
 const ARMOUR = { helm: [3, 6, 9, 13, 18, 27], shield: [5, 9, 13, 19, 26, 40], body: [10, 18, 25, 35, 48, 70], legs: [7, 12, 18, 26, 36, 52], boots: [2, 3, 5, 7, 10, 15], gloves: [2, 3, 5, 7, 10, 15] };
@@ -334,6 +335,18 @@ export const MONSTERS = {
     drops: [{ id: 'dragon_bones', p: 1, n: [1, 1] }, { id: 'iron_bar', p: 0.7, n: [2, 5] }, { id: 'coins', p: 1, n: [150, 400] }, { id: 'rune_axe', p: 0.015, n: [1, 1] }] },
   bronze_dragon: { name: 'Bronze dragon', level: 131, hp: 102, atk: 112, def: 112, maxHit: 14, interval: 2.4, color: '#d08f55', family: 'beast', defB: { stab: 40, slash: 40, crush: 40 }, boss: true, respawn: 35, epFlat: 8, epChance: 0,
     drops: [{ id: 'dragon_bones', p: 1, n: [1, 1] }, { id: 'bronze_bar', p: 0.6, n: [2, 5] }, { id: 'coins', p: 1, n: [100, 300] }, { id: 'rune_longsword', p: 0.02, n: [1, 1] }] },
+  white_knight: { name: 'White Knight', level: 36, hp: 42, atk: 30, def: 30, maxHit: 5, interval: 1.8, color: '#f0f0f0', family: 'humanoid', defB: { stab: 15, slash: 20, crush: 10 }, epChance: 0.08,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.7, n: [15, 40] }, { id: 'steel_sword', p: 0.04, n: [1, 1] }, { id: 'steel_helm', p: 0.03, n: [1, 1] }] },
+  guard: { name: 'Guard', level: 21, hp: 22, atk: 19, def: 18, maxHit: 3, interval: 1.8, color: '#6a8a4a', family: 'humanoid', defB: { stab: 10, slash: 12, crush: 8 }, epChance: 0.05,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.6, n: [5, 20] }, { id: 'iron_sword', p: 0.03, n: [1, 1] }] },
+  thief: { name: 'Thief', level: 14, hp: 17, atk: 12, def: 10, maxHit: 2, interval: 1.6, color: '#5a4a3a', family: 'humanoid', defB: { stab: 5, slash: 8, crush: 5 }, epChance: 0.06,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.8, n: [10, 30] }, { id: 'bronze_dagger', p: 0.05, n: [1, 1] }] },
+  pirate: { name: 'Pirate', level: 23, hp: 25, atk: 20, def: 18, maxHit: 3, interval: 1.8, color: '#8a4a3a', family: 'humanoid', defB: { stab: 8, slash: 10, crush: 6 }, epChance: 0.07,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.7, n: [8, 25] }, { id: 'iron_scimitar', p: 0.04, n: [1, 1] }] },
+  seagull: { name: 'Seagull', level: 2, hp: 4, atk: 1, def: 1, maxHit: 1, interval: 1.5, color: '#e8e8e8', family: 'beast', defB: { stab: 0, slash: 0, crush: 0 }, epChance: 0.02,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'feather', p: 0.5, n: [2, 5] }] },
+  chaos_elemental: { name: 'Chaos elemental', level: 305, hp: 250, atk: 250, def: 200, maxHit: 28, interval: 2.4, color: '#6a3a6a', family: 'beast', defB: { stab: 50, slash: 50, crush: 50 }, boss: true, respawn: 90, epFlat: 30, epChance: 0,
+    drops: [{ id: 'coins', p: 1, n: [500, 2000] }, { id: 'death_rune', p: 0.6, n: [10, 30] }, { id: 'chaos_rune', p: 0.5, n: [15, 40] }, { id: 'rune_platebody', p: 0.01, n: [1, 1] }] },
 };
 // ---- resource nodes. chance = base success per attempt at the required level (+1.2% per level above, capped 90%).
 export const NODES = {
@@ -421,6 +434,56 @@ export const AREAS = {
       ['monster', 'iron_dragon', 1700], ['monster', 'iron_dragon', 1820],
       ['monster', 'bronze_dragon', 1980],
       ['station', 'fire', 2200]
+    ],
+  },
+  falador: {
+    name: 'Falador', width: 2200, spawn: 160, req: null, sky: ['#d0e0f0', '#e8f0f8'], hill: ['#8aa0b0', '#6a8090'], ground: '#7a90a0',
+    entities: [
+      ['sign', 'lumby', 70], ['station', 'bank', 280], ['station', 'store', 420],
+      ['monster', 'white_knight', 600], ['monster', 'white_knight', 700],
+      ['monster', 'guard', 850], ['monster', 'guard', 950],
+      ['node', 'iron', 1150], ['node', 'coal', 1250],
+      ['sign', 'varrock', 2100]
+    ],
+  },
+  varrock: {
+    name: 'Varrock', width: 2400, spawn: 180, req: null, sky: ['#c8d8c8', '#e0f0e0'], hill: ['#6a8a5a', '#4a6a3a'], ground: '#5a7a4a',
+    entities: [
+      ['sign', 'falador', 80], ['station', 'bank', 300], ['station', 'store', 450],
+      ['monster', 'guard', 650], ['monster', 'guard', 750],
+      ['monster', 'thief', 900], ['monster', 'thief', 1000],
+      ['node', 'tree', 1200], ['node', 'tree', 1300],
+      ['sign', 'edgeville', 2300]
+    ],
+  },
+  edgeville: {
+    name: 'Edgeville', width: 2000, spawn: 140, req: null, sky: ['#b0c0d0', '#d0e0f0'], hill: ['#5a6a7a', '#3a4a5a'], ground: '#4a5a6a',
+    entities: [
+      ['sign', 'varrock', 70], ['station', 'bank', 250], ['station', 'store', 400],
+      ['monster', 'guard', 550], ['monster', 'skeleton', 700], ['monster', 'skeleton', 800],
+      ['sign', 'wilderness', 1900]
+    ],
+  },
+  wilderness: {
+    name: 'Wilderness', width: 2800, spawn: 120, req: null, sky: ['#6a4a3a', '#8a6a5a'], hill: ['#4a2a1a', '#3a1a0a'], ground: '#5a3a2a',
+    entities: [
+      ['sign', 'edgeville', 60],
+      ['monster', 'dark_wizard', 250], ['monster', 'dark_wizard', 350],
+      ['monster', 'greater_demon', 500], ['monster', 'black_demon', 650],
+      ['monster', 'chaos_elemental', 850],
+      ['monster', 'green_dragon', 1050], ['monster', 'green_dragon', 1150],
+      ['monster', 'moss_giant', 1350], ['monster', 'fire_giant', 1500],
+      ['station', 'fire', 1800]
+    ],
+  },
+  port_sarim: {
+    name: 'Port Sarim', width: 2000, spawn: 150, req: null, sky: ['#a0d0e8', '#c0e0f8'], hill: ['#6a9ab0', '#4a7a90'], ground: '#5a8aa0',
+    entities: [
+      ['sign', 'lumby', 70], ['station', 'bank', 280], ['station', 'store', 420],
+      ['monster', 'pirate', 600], ['monster', 'pirate', 700],
+      ['monster', 'seagull', 850], ['monster', 'seagull', 950],
+      ['node', 'pond', 1150],
+      ['sign', 'draynor', 1900]
     ],
   },
 };

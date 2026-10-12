@@ -63,6 +63,7 @@ export function drawGlyph(ctx, art, c = '#aab3bf', d = '#5f6875') {
     case 'bow': rrect(ctx, -2, -20, 4, 40, 2, '#8a5a30'); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 14, -1.2, 1.2); ctx.stroke(); break;
     case 'arrow': rrect(ctx, -1, -16, 2, 32, 1, '#8a5a30'); poly(ctx, [[0, -20], [-3, -14], [3, -14]], c); break;
     case 'rune': circle(ctx, 0, 0, 10, c, OUT, 1.5); circle(ctx, 0, 0, 4, shade(c, 1.3), null); break;
+    case 'staff': rrect(ctx, -2, -22, 4, 44, 2, '#8a5a30'); circle(ctx, 0, -26, 6, c, OUT, 1.5); circle(ctx, 0, -26, 3, shade(c, 1.3), null); break;
     case 'scroll': rrect(ctx, -10, -14, 20, 28, 2, c, OUT, 1.5); ctx.strokeStyle = shade(c, 0.7); ctx.lineWidth = 1; for (let i = -8; i <= 8; i += 4) { ctx.beginPath(); ctx.moveTo(-6, i); ctx.lineTo(6, i); ctx.stroke(); } break;
     case 'gem': {
       const shade = (h) => { const n = parseInt(h.slice(1), 16); const f = (v) => Math.round(v * 0.7).toString(16).padStart(2, '0'); return `#${f(n >> 16)}${f((n >> 8) & 255)}${f(n & 255)}`; };
@@ -299,6 +300,95 @@ export function drawMonster(ctx, kind, x, y, s, o) {
   } else if (kind === 'wolf' || kind === 'alpha_wolf') {
     const a = kind === 'alpha_wolf', fur = a ? '#454a56' : color, fd = dk(fur, 0.78), st = Math.sin(t * 5 + seed);
     for (const [lx, far] of [[-21, 1], [-11, 0], [9, 1], [19, 0]]) rrect(ctx, lx - 3, -17 - (swing != null ? 0 : 0), 6.5, 17, 2, far ? fd : fur);
+  } else if (kind === 'bat') {
+    const flap = Math.sin(t * 8 + seed) * 0.4;
+    ctx.save(); ctx.translate(-6, -20 - bob); ctx.rotate(flap); poly(ctx, [[0, 0], [-16, -8], [-10, 4]], '#4a3a6a'); ctx.restore();
+    ctx.save(); ctx.translate(6, -20 - bob); ctx.rotate(-flap); poly(ctx, [[0, 0], [16, -8], [10, 4]], '#5a4a7a'); ctx.restore();
+    ellipse(ctx, 0, -18 - bob, 8, 6, '#3a2a5a'); circle(ctx, -2, -20 - bob, 1.5, '#ff3a2a', null); circle(ctx, 2, -20 - bob, 1.5, '#ff3a2a', null);
+  } else if (kind === 'giant_rat') {
+    ellipse(ctx, 0, -10 - bob, 16, 8, '#8a7a6a'); ellipse(ctx, 8, -12 - bob, 8, 5, '#9a8a7a');
+    circle(ctx, 12, -14 - bob, 1.5, '#2a2a2a', null); poly(ctx, [[-10, -8 - bob], [-16, -4 - bob], [-8, -6 - bob]], '#7a6a5a');
+    rrect(ctx, -6, -6, 3, 6, 1, '#6a5a4a'); rrect(ctx, 4, -6, 3, 6, 1, '#7a6a5a');
+  } else if (kind === 'al_kharid_warrior') {
+    rrect(ctx, -7, -16, 6, 16, 2, '#c8a050'); rrect(ctx, 1, -16, 6, 16, 2, '#d8b060');
+    rrect(ctx, -11, -40 - bob, 22, 24, 3, '#e8c070'); rrect(ctx, -11, -28 - bob, 22, 4, 1, '#b89040', null);
+    const hy = -42 - bob; rrect(ctx, -8, hy - 14, 16, 14, 3, '#e8d0a0'); rrect(ctx, -5, hy - 8, 3, 2, 1, '#2a2a2a', null); rrect(ctx, 3, hy - 8, 3, 2, 1, '#2a2a2a', null);
+    poly(ctx, [[-8, hy - 14], [0, hy - 22], [8, hy - 14]], '#f0e0b0');
+    rrect(ctx, 10, -36 - bob, 3, 18, 1, '#8a6a3a'); poly(ctx, [[11, -38 - bob], [11, -48 - bob], [16, -42 - bob]], '#d0d0d8');
+  } else if (kind === 'white_knight' || kind === 'guard') {
+    const white = kind === 'white_knight', armor = white ? '#f0f0f0' : '#6a8a4a';
+    rrect(ctx, -7, -16, 6, 16, 2, white ? '#d0d0d0' : '#5a7a3a'); rrect(ctx, 1, -16, 6, 16, 2, armor);
+    rrect(ctx, -11, -40 - bob, 22, 24, 3, armor); rrect(ctx, -11, -28 - bob, 22, 4, 1, white ? '#c0c0c0' : '#4a6a3a', null);
+    const hy = -42 - bob; rrect(ctx, -8, hy - 14, 16, 14, 3, white ? '#e8e8e8' : '#7a9a5a'); rrect(ctx, -5, hy - 8, 3, 2, 1, '#2a2a2a', null); rrect(ctx, 3, hy - 8, 3, 2, 1, '#2a2a2a', null);
+    if (white) poly(ctx, [[-8, hy - 14], [0, hy - 24], [8, hy - 14]], '#f0f0f0');
+    rrect(ctx, 10, -36 - bob, 3, 18, 1, '#8a6a3a'); poly(ctx, [[11, -38 - bob], [11, -50 - bob], [16, -42 - bob]], '#d0d0d8');
+  } else if (kind === 'thief' || kind === 'pirate') {
+    const pirate = kind === 'pirate', cloth = pirate ? '#8a4a3a' : '#5a4a3a';
+    rrect(ctx, -6, -14, 5, 14, 2, '#4a3a2a'); rrect(ctx, 1, -14, 5, 14, 2, cloth);
+    rrect(ctx, -10, -36 - bob, 20, 22, 3, cloth); rrect(ctx, -10, -24 - bob, 20, 4, 1, '#3a2a1a', null);
+    const hy = -38 - bob; rrect(ctx, -7, hy - 12, 14, 12, 3, '#e8d0b0'); rrect(ctx, -4, hy - 6, 3, 2, 1, '#2a2a2a', null); rrect(ctx, 2, hy - 6, 3, 2, 1, '#2a2a2a', null);
+    if (pirate) poly(ctx, [[-7, hy - 12], [0, hy - 20], [7, hy - 12]], '#4a2a1a');
+  } else if (kind === 'seagull') {
+    const flap = Math.sin(t * 6 + seed) * 0.3;
+    ctx.save(); ctx.translate(-4, -16 - bob); ctx.rotate(flap); poly(ctx, [[0, 0], [-12, -4], [-6, 2]], '#e8e8e8'); ctx.restore();
+    ctx.save(); ctx.translate(4, -16 - bob); ctx.rotate(-flap); poly(ctx, [[0, 0], [12, -4], [6, 2]], '#f0f0f0'); ctx.restore();
+    ellipse(ctx, 0, -14 - bob, 6, 4, '#e0e0e0'); circle(ctx, 2, -15 - bob, 1, '#2a2a2a', null);
+  } else if (kind === 'chaos_elemental') {
+    const pulse = 1 + Math.sin(t * 3 + seed) * 0.1;
+    ctx.scale(pulse, pulse);
+    circle(ctx, 0, -30 - bob, 18, '#6a3a6a'); circle(ctx, 0, -30 - bob, 12, '#8a5a8a', null);
+    circle(ctx, -6, -34 - bob, 3, '#ff3a2a', null); circle(ctx, 6, -34 - bob, 3, '#ff3a2a', null);
+    for (let i = 0; i < 6; i++) { const a = (t + i) * 0.8; circle(ctx, Math.cos(a) * 22, -30 - bob + Math.sin(a) * 16, 3, '#4a2a4a', null); }
+  } else if (kind === 'skeleton') {
+    rrect(ctx, -6, -14, 5, 14, 2, '#e8e0d0'); rrect(ctx, 1, -14, 5, 14, 2, '#d8d0c0');
+    rrect(ctx, -10, -36 - bob, 20, 22, 3, '#f0e8d8'); rrect(ctx, -8, -32 - bob, 16, 4, 1, '#c8c0b0', null);
+    const hy = -38 - bob; rrect(ctx, -8, hy - 14, 16, 14, 3, '#f0e8d8'); rrect(ctx, -6, hy - 8, 4, 3, 1, '#2a2a2a', null); rrect(ctx, 2, hy - 8, 4, 3, 1, '#2a2a2a', null);
+    rrect(ctx, -4, hy - 2, 8, 2, 1, '#c8c0b0', null);
+  } else if (kind === 'zombie') {
+    rrect(ctx, -7, -14, 6, 14, 2, '#5a6a4a'); rrect(ctx, 1, -14, 6, 14, 2, '#6a7a5a');
+    rrect(ctx, -11, -38 - bob, 22, 24, 3, '#6a8a5a'); rrect(ctx, -11, -26 - bob, 22, 4, 1, '#4a5a3a', null);
+    const hy = -40 - bob; rrect(ctx, -9, hy - 14, 18, 14, 3, '#7a9a6a'); rrect(ctx, -5, hy - 7, 3, 3, 1, '#2a2a2a', null); rrect(ctx, 3, hy - 7, 3, 3, 1, '#2a2a2a', null);
+    rrect(ctx, -6, hy - 1, 10, 3, 1, '#c8a8a0', null);
+  } else if (kind === 'imp') {
+    rrect(ctx, -5, -10, 4, 10, 2, '#d8453c'); rrect(ctx, 1, -10, 4, 10, 2, '#c8352c');
+    rrect(ctx, -8, -26 - bob, 16, 16, 3, '#e85545');
+    const hy = -28 - bob; rrect(ctx, -7, hy - 10, 14, 10, 3, '#f06555'); poly(ctx, [[-7, hy - 6], [-14, hy - 14], [-7, hy - 2]], '#d8453c'); poly(ctx, [[7, hy - 6], [14, hy - 14], [7, hy - 2]], '#e85545');
+    rrect(ctx, -4, hy - 5, 3, 2, 1, '#2a2a2a', null); rrect(ctx, 2, hy - 5, 3, 2, 1, '#2a2a2a', null);
+  } else if (kind === 'scorpion') {
+    ellipse(ctx, 0, -12 - bob, 22, 10, '#c8a050'); ellipse(ctx, 0, -10 - bob, 16, 7, '#d8b060', null);
+    for (const lx of [-12, -6, 0, 6, 12]) rrect(ctx, lx - 1.5, -6, 3, 6, 1, '#b89040');
+    poly(ctx, [[0, -18 - bob], [-4, -32 - bob], [4, -32 - bob]], '#a08030'); circle(ctx, 0, -34 - bob, 3, '#d8453c');
+  } else if (kind === 'wizard' || kind === 'dark_wizard') {
+    const dark = kind === 'dark_wizard', robe = dark ? '#4a3a6a' : '#6a6ae8', skin = '#e8d0b0';
+    rrect(ctx, -8, -16, 7, 16, 2, dark ? '#3a2a5a' : '#5a5ad8'); rrect(ctx, 1, -16, 7, 16, 2, robe);
+    rrect(ctx, -12, -42 - bob, 24, 26, 4, robe); rrect(ctx, -12, -30 - bob, 24, 4, 1, dark ? '#2a1a4a' : '#4a4ac8', null);
+    const hy = -44 - bob; rrect(ctx, -8, hy - 14, 16, 14, 3, skin); rrect(ctx, -5, hy - 8, 3, 2, 1, '#2a2a2a', null); rrect(ctx, 3, hy - 8, 3, 2, 1, '#2a2a2a', null);
+    poly(ctx, [[-8, hy - 14], [0, hy - 28], [8, hy - 14]], dark ? '#2a1a4a' : '#5a5ad8');
+    rrect(ctx, 10, -38 - bob, 3, 20, 1, '#8a6a4a'); circle(ctx, 12, -40 - bob, 4, dark ? '#6a3a8a' : '#a0d0e8');
+  } else if (kind === 'moss_giant' || kind === 'fire_giant') {
+    const fire = kind === 'fire_giant', skin = fire ? '#d8453c' : '#6a8a5a', scale = 1.4;
+    ctx.scale(scale, scale);
+    rrect(ctx, -12, -20, 10, 20, 3, dk(skin, 0.85)); rrect(ctx, 2, -20, 10, 20, 3, skin);
+    rrect(ctx, -14, -50 - bob, 28, 30, 4, dk(skin, 0.9));
+    const hy = -52 - bob; rrect(ctx, -11, hy - 18, 22, 18, 4, skin); rrect(ctx, -6, hy - 10, 4, 3, 1, '#2a2a2a', null); rrect(ctx, 4, hy - 10, 4, 3, 1, '#2a2a2a', null);
+    if (fire) { circle(ctx, -8, hy - 6, 3, '#ff7a1e', null); circle(ctx, 6, hy - 4, 2.5, '#ffd34a', null); }
+    else { rrect(ctx, -10, hy - 20, 20, 4, 2, '#4a6a3a', null); }
+  } else if (kind === 'greater_demon' || kind === 'black_demon') {
+    const black = kind === 'black_demon', skin = black ? '#2a1a1a' : '#8a2a2a', scale = black ? 1.5 : 1.3;
+    ctx.scale(scale, scale);
+    rrect(ctx, -10, -18, 8, 18, 3, dk(skin, 0.8)); rrect(ctx, 2, -18, 8, 18, 3, skin);
+    rrect(ctx, -13, -46 - bob, 26, 28, 4, skin);
+    const hy = -48 - bob; rrect(ctx, -10, hy - 16, 20, 16, 3, dk(skin, 1.1)); poly(ctx, [[-10, hy - 10], [-18, hy - 22], [-8, hy - 6]], dk(skin, 0.9)); poly(ctx, [[10, hy - 10], [18, hy - 22], [8, hy - 6]], skin);
+    rrect(ctx, -5, hy - 8, 3, 3, 1, '#ff3a2a', null); rrect(ctx, 4, hy - 8, 3, 3, 1, '#ff3a2a', null);
+  } else if (kind.includes('dragon')) {
+    const col = color || '#3a8a4a', scale = 1.6;
+    ctx.scale(scale, scale);
+    ellipse(ctx, 0, -20 - bob, 30, 16, col); ellipse(ctx, 0, -18 - bob, 22, 10, shade(col, 1.15), null);
+    poly(ctx, [[-8, -22 - bob], [-20, -38 - bob], [-4, -24 - bob]], shade(col, 0.85)); poly(ctx, [[8, -22 - bob], [20, -38 - bob], [4, -24 - bob]], col);
+    const hx = 18, hy = -24 - bob; rrect(ctx, hx - 6, hy - 8, 14, 10, 3, col); rrect(ctx, hx + 2, hy - 4, 3, 2, 1, '#2a2a2a', null);
+    poly(ctx, [[hx + 6, hy - 2], [hx + 16, hy], [hx + 6, hy + 2]], shade(col, 0.9));
+    poly(ctx, [[-10, -28 - bob], [-30, -50 - bob], [-5, -30 - bob]], shade(col, 0.75)); poly(ctx, [[10, -28 - bob], [30, -50 - bob], [5, -30 - bob]], shade(col, 0.85));
+  } else {
     rrect(ctx, -26, -37 - bob, 52, 21, 6, fur); rrect(ctx, -26, -24 - bob, 52, 8, 4, fd, null); rrect(ctx, -26, -37 - bob, 52, 5, 3, shade(fur, 1.15), null);
     ctx.save(); ctx.translate(-26, -33 - bob); ctx.rotate(-0.5 + st * 0.12); rrect(ctx, -22, -5, 24, 9, 4, fd); rrect(ctx, -22, -4, 7, 7, 3, shade(fur, 0.6), null); ctx.restore();
     const hx = 27 + ph * 8, hy = -40 - bob + ph * 4;
@@ -333,11 +423,19 @@ export function drawNode(ctx, kind, x, y, s, depleted, color, t = 0, chip = 0) {
   ellipse(ctx, 0, 0, 25, 5, 'rgba(0,0,0,.22)', null);
   const shake = chip > 0 ? Math.sin(chip * 40) * 2 * chip : 0;
   ctx.translate(shake, 0);
-  if (kind === 'tree' || kind === 'oak') {
-    const g = color, trunk = kind === 'oak' ? '#6a4524' : '#7a5530';
+  if (kind === 'tree' || kind === 'oak' || kind === 'willow') {
+    const g = color, trunk = kind === 'oak' ? '#6a4524' : kind === 'willow' ? '#5a6a4a' : '#7a5530';
     if (depleted) {
       rrect(ctx, -10, -13, 20, 13, 3, shade(trunk, 0.9)); ellipse(ctx, 0, -13, 10, 4.5, '#d4b27a'); ellipse(ctx, 0, -13, 6, 2.6, '#b8935c', null); ellipse(ctx, 0, -13, 2.6, 1.2, '#d4b27a', null);
       rrect(ctx, 14, -4, 9, 4, 1.5, trunk, null);
+    } else if (kind === 'willow') {
+      rrect(ctx, -7, -50, 14, 50, 3, trunk); rrect(ctx, -7, -50, 4, 50, 2, 'rgba(0,0,0,.2)', null);
+      poly(ctx, [[-28, -48], [-18, -72], [0, -84], [18, -72], [28, -48], [16, -40], [-16, -40]], g);
+      poly(ctx, [[-28, -48], [-18, -72], [-2, -64], [-8, -44]], shade(g, 0.86), null);
+      poly(ctx, [[0, -84], [18, -72], [4, -64], [-2, -64], [-18, -72]], shade(g, 1.18), null);
+      poly(ctx, [[-28, -48], [-18, -72], [0, -84], [18, -72], [28, -48], [16, -40], [-16, -40]], null, OUT, 1.8);
+      ctx.strokeStyle = shade(g, 0.7); ctx.lineWidth = 2;
+      for (const dx of [-16, -6, 6, 16]) { ctx.beginPath(); ctx.moveTo(dx, -42); ctx.quadraticCurveTo(dx + 4, -20, dx + 8, -4); ctx.stroke(); }
     } else {
       rrect(ctx, -9, -54, 18, 54, 3, trunk); rrect(ctx, -9, -54, 6, 54, 2, 'rgba(0,0,0,.2)', null); rrect(ctx, 3, -40, 3, 12, 1, shade(trunk, 1.2), null);
       // blocky low-poly canopy: stacked faceted polygons
@@ -346,7 +444,7 @@ export function drawNode(ctx, kind, x, y, s, depleted, color, t = 0, chip = 0) {
       poly(ctx, [[-34, -52], [-24, -80], [0, -96], [24, -80], [34, -52], [20, -44], [-20, -44]], null, OUT, 1.8);
     }
   } else {
-    const dull = depleted, base = dull ? '#6d6d75' : kind === 'coal' ? '#4a4b52' : '#8b8b96';
+    const dull = depleted, base = dull ? '#6d6d75' : kind === 'coal' ? '#4a4b52' : kind === 'rune_essence' ? '#c8c0a8' : '#8b8b96';
     poly(ctx, [[-31, 0], [-35, -16], [-22, -36], [-4, -43], [16, -38], [30, -22], [35, 0]], base);
     poly(ctx, [[-22, -36], [-4, -43], [-6, -26], [-20, -22]], shade(base, 1.22), null); poly(ctx, [[16, -38], [30, -22], [35, 0], [12, 0], [6, -24]], shade(base, 0.8), null);
     poly(ctx, [[-31, 0], [-35, -16], [-22, -36], [-4, -43], [16, -38], [30, -22], [35, 0]], null, OUT, 1.8);
@@ -382,6 +480,10 @@ export function drawStation(ctx, kind, x, y, s, t = 0) {
   } else if (kind === 'bank') {
     rrect(ctx, -32, -36, 64, 36, 4, '#8a5a30'); rrect(ctx, -32, -36, 64, 6, 3, '#a56a38', null); ctx.beginPath(); ctx.roundRect(-32, -52, 64, 22, [16, 16, 0, 0]); ctx.fillStyle = '#a56a38'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = OUT; ctx.stroke();
     for (const bx of [-22, 22]) rrect(ctx, bx - 3, -52, 6, 52, 1, '#d6b24a', null); rrect(ctx, -34, -30, 68, 6, 1, '#d6b24a'); rrect(ctx, -7, -35, 14, 16, 3, '#f1d77a'); circle(ctx, 0, -27, 2.2, OUT, null);
+  } else if (kind === 'tanner') {
+    rrect(ctx, -18, -24, 36, 24, 3, '#8a6a4a'); rrect(ctx, -16, -22, 32, 6, 2, '#6a4a3a', null);
+    rrect(ctx, -12, -16, 8, 10, 2, '#c9a46a'); rrect(ctx, 2, -16, 8, 10, 2, '#b9824a');
+    rrect(ctx, -4, -8, 8, 6, 1, '#e8d0a0', null);
   } else if (kind === 'store') {
     rrect(ctx, -32, -52, 5, 52, 1, '#6a4524'); rrect(ctx, 27, -52, 5, 52, 1, '#6a4524');
     for (let i = 0; i < 6; i++) { poly(ctx, [[-36 + i * 12, -74], [-24 + i * 12, -74], [-25 + i * 12, -52], [-35 + i * 12, -52]], i % 2 ? '#fff' : '#d8453c'); }
