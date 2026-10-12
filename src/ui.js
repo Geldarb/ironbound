@@ -183,7 +183,7 @@ export class UI {
   r_skills(b) {
     const g = this.g;
     b.appendChild(el('div', 'row', `<div class="tx"><b>Combat level ${g.combatLevel}</b><small>Attack, Strength, Defence, Hitpoints</small></div>`));
-    const core = ['attack', 'strength', 'defence', 'hitpoints', 'mining', 'smithing', 'fishing', 'cooking', 'woodcutting'];
+    const core = ['attack', 'strength', 'defence', 'hitpoints', 'mining', 'smithing', 'fishing', 'cooking', 'woodcutting', 'slayer'];
     for (const s of SKILLS.filter((x) => core.includes(x.id))) {
       const xp = g.data.xp[s.id], lv = g.level(s.id);
       const r = el('div', 'row', `<div class="tx"><b>${s.name} <span style="float:right;color:var(--gold)">${lv}</span></b><small>${lv >= 99 ? 'Max level' : `${fmt(xp)} xp · ${fmt(xpForLevel(lv + 1) - xp)} to next`}</small><div class="xpbar"><i style="width:${Math.round(levelProgress(xp) * 100)}%;background:${s.color}"></i></div></div>`);
@@ -335,8 +335,8 @@ export class UI {
     seg.querySelectorAll('button').forEach((x) => { x.onclick = () => { this.craftMenu = x.dataset.menu; this.renderSheet(); $('sheetBody').scrollTop = 0; }; });
     b.appendChild(seg);
     const sk = menu === 'cook' ? 'cooking' : menu === 'fletch' ? 'fletching' : menu === 'craft' ? 'crafting' : 'smithing';
-    if (!g.stationVisited(menu)) b.appendChild(el('div', 'warn', menu === 'cook' ? 'Walk up to a campfire or range (tap it) to unlock cooking. Starter Meadow has both.' : `Walk to the ${STATIONS[menu].name} in Starter Meadow (tap it) to unlock this menu.`));
-    else b.appendChild(el('p', 'note', (menu === 'cook' ? `${g.data.visited.range ? 'Using a range (fewer burnt)' : 'Using a campfire (find a range to burn less)'}. ` : STATIONS[menu].blurb + ' ') + `${cap(sk)} level ${g.level(sk)}.`));
+    if (!g.stationVisited(menu) && menu !== 'fletch' && menu !== 'craft') b.appendChild(el('div', 'warn', menu === 'cook' ? 'Walk up to a campfire or range (tap it) to unlock cooking. Starter Meadow has both.' : `Walk to the ${STATIONS[menu].name} in Starter Meadow (tap it) to unlock this menu.`));
+    else b.appendChild(el('p', 'note', (menu === 'cook' ? `${g.data.visited.range ? 'Using a range (fewer burnt)' : 'Using a campfire (find a range to burn less)'}. ` : (STATIONS[menu]?.blurb || '') + ' ') + `${cap(sk)} level ${g.level(sk)}.`));
     if (menu === 'anvil') {
       if (this.smithTier == null) this.smithTier = 0;
       const chips = el('div', 'seg', TIERS.map((t, i) => `<button data-tier="${i}" class="${i === this.smithTier ? 'on' : ''}" style="padding:0 2px;font-size:12px">${t.name}</button>`).join(''));
