@@ -268,6 +268,7 @@ export class UI {
     if (extract) extract.onclick = () => this.extractPrompt(idx);
     const clue = c.querySelector('#mClue');
     if (clue) clue.onclick = () => { g.openClue(); this.closeModal(); };
+    const apply = c.querySelector('#mApply');
     if (apply) apply.onclick = () => this.applyGemPrompt(idx);
     const combine = c.querySelector('#mCombine');
     if (combine) combine.onclick = () => this.combineGemPrompt(idx);
@@ -317,14 +318,14 @@ export class UI {
       const rc = rarityOf(s.e);
       const r = el('div', 'row', `${img(s.id)}<div class="tx"><b${rc ? ` style="color:${rc.color}"` : ''}>${esc(itemName(s.id))} ${s.n > 1 ? 'x' + s.n : ''}</b><small>${g.sellValue(s.id)} coins each${rc ? ` · ${rc.name} enchant (lost if sold)` : ''}</small></div><div class="btns"><button class="btn sm" data-k="1">1</button>${s.n > 1 ? `<button class="btn sm gold" data-k="${s.n}">All</button>` : ''}</div>`);
       r.dataset.item = s.id; r.dataset.idx = i; if (rc) r.style.borderColor = rc.color;
-      r.querySelectorAll('[data-k]').forEach((x) => { x.onclick = () => g.sellSlot(i, Number(x.dataset.k)); });
+      r.querySelectorAll('[data-k]').forEach((x) => { x.onclick = () => { g.sellSlot(i, Number(x.dataset.k)); this.renderSheet(); }; });
       b.appendChild(r);
     }
     b.appendChild(el('div', 'note', '<b>Buy</b>'));
     for (const id of SHOP_BUY) {
       const r = el('div', 'row', `${img(id)}<div class="tx"><b>${esc(itemName(id))}</b><small>${ITEMS[id].value} coins${ITEMS[id].tool ? ` · ${ITEMS[id].tool}` : ''}</small></div><div class="btns"><button class="btn sm gold" data-buy="${id}" ${g.data.coins < ITEMS[id].value ? 'disabled' : ''}>Buy</button>${isStackable(id) ? `<button class="btn sm" data-buy10="${id}" ${g.data.coins < ITEMS[id].value * 10 ? 'disabled' : ''}>x10</button>` : ''}</div>`);
-      r.querySelector('[data-buy]').onclick = () => g.buy(id);
-      const b10 = r.querySelector('[data-buy10]'); if (b10) b10.onclick = () => { for (let i = 0; i < 10; i++) if (!g.buy(id)) break; };
+      r.querySelector('[data-buy]').onclick = () => { g.buy(id); this.renderSheet(); };
+      const b10 = r.querySelector('[data-buy10]'); if (b10) b10.onclick = () => { for (let i = 0; i < 10; i++) if (!g.buy(id)) break; this.renderSheet(); };
       b.appendChild(r);
     }
   }
