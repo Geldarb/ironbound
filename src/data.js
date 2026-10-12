@@ -4,12 +4,18 @@ export const SKILLS = [
   { id: 'strength', name: 'Strength', color: '#3fb950', short: 'Str' },
   { id: 'defence', name: 'Defence', color: '#3b8eea', short: 'Def' },
   { id: 'hitpoints', name: 'Hitpoints', color: '#ff6b81', short: 'HP' },
+  { id: 'ranged', name: 'Ranged', color: '#4aaf6a', short: 'Rng' },
+  { id: 'magic', name: 'Magic', color: '#6a6ae8', short: 'Mag' },
   { id: 'mining', name: 'Mining', color: '#c9773a', short: 'Min' },
   { id: 'smithing', name: 'Smithing', color: '#9aa3ad', short: 'Smi' },
   { id: 'woodcutting', name: 'Woodcutting', color: '#7a9a3a', short: 'Wdc' },
   { id: 'fishing', name: 'Fishing', color: '#4aa3e8', short: 'Fis' },
   { id: 'cooking', name: 'Cooking', color: '#e8a33a', short: 'Coo' },
+  { id: 'crafting', name: 'Crafting', color: '#c98a4a', short: 'Cft' },
+  { id: 'fletching', name: 'Fletching', color: '#7aaf4a', short: 'Flt' },
+  { id: 'runecrafting', name: 'Runecraft', color: '#9a6ae8', short: 'Rnc' },
   { id: 'prayer', name: 'Prayer', color: '#c9a227', short: 'Pra' },
+  { id: 'slayer', name: 'Slayer', color: '#8a3a9a', short: 'Sly' },
 ];
 /** Global XP multiplier applied to every XP gain (combat + gathering + crafting). The level table itself is the real RuneScape one,
  *  so changing this never changes anyone's stored level. Single tunable: 3 => level 2 in ~3 chicken kills, level 10 in a few minutes. */
@@ -18,7 +24,7 @@ export const XP_RATE = 3;
 export const OFFLINE = { minAway: 60, capHours: 3, efficiency: 0.5 };
 export const SKILL_IDS = SKILLS.map((s) => s.id);
 export const SKILL_BY_ID = Object.fromEntries(SKILLS.map((s) => [s.id, s]));
-export const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
+export const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic'];
 
 // ---- Prayer. Points drain while a prayer is active. Bones are buried for XP.
 export const PRAYERS = [
@@ -28,14 +34,55 @@ export const PRAYERS = [
   { id: 'rock_skin', name: 'Rock Skin', level: 10, drain: 0.6, blurb: '+10% Defence' },
   { id: 'superhuman_strength', name: 'Superhuman Strength', level: 13, drain: 0.6, blurb: '+10% Strength' },
   { id: 'improved_reflexes', name: 'Improved Reflexes', level: 16, drain: 0.6, blurb: '+10% Attack' },
+  { id: 'rapid_heal', name: 'Rapid Heal', level: 22, drain: 0.5, blurb: '+2x HP regen' },
+  { id: 'protect_from_melee', name: 'Protect from Melee', level: 43, drain: 1.2, blurb: 'Halves melee damage taken' },
+  { id: 'protect_from_missiles', name: 'Protect from Missiles', level: 40, drain: 1.2, blurb: 'Halves ranged damage taken' },
+  { id: 'protect_from_magic', name: 'Protect from Magic', level: 37, drain: 1.2, blurb: 'Halves magic damage taken' },
+  { id: 'steel_skin', name: 'Steel Skin', level: 28, drain: 0.8, blurb: '+15% Defence' },
+  { id: 'ultimate_strength', name: 'Ultimate Strength', level: 31, drain: 0.8, blurb: '+15% Strength' },
+  { id: 'incredible_reflexes', name: 'Incredible Reflexes', level: 34, drain: 0.8, blurb: '+15% Attack' },
+  { id: 'eagle_eye', name: 'Eagle Eye', level: 44, drain: 0.8, blurb: '+15% Ranged' },
+  { id: 'mystic_might', name: 'Mystic Might', level: 45, drain: 0.8, blurb: '+15% Magic' },
 ];
 export const PRAYER_BY_ID = Object.fromEntries(PRAYERS.map((p) => [p.id, p]));
 /** Bone types: base XP when buried anywhere, altar XP (bonus), and EP chance per bone when used at the prayer altar. */
 export const BONES = {
   bones: { name: 'Bones', xp: 4.5, altarXp: 9, epChance: 0.4, epFlat: 1 },
   big_bones: { name: 'Big bones', xp: 15, altarXp: 30, epChance: 0.6, epFlat: 2 },
+  bat_bones: { name: 'Bat bones', xp: 5.3, altarXp: 11, epChance: 0.45, epFlat: 1 },
+  dragon_bones: { name: 'Dragon bones', xp: 72, altarXp: 144, epChance: 0.8, epFlat: 4 },
+  wolf_bones: { name: 'Wolf bones', xp: 12, altarXp: 24, epChance: 0.5, epFlat: 1 },
 };
 export const BONE_XP = Object.fromEntries(Object.entries(BONES).map(([k, v]) => [k, v.xp]));
+
+// ---- Slayer tasks. assigned by the Slayer master. amount scales with level.
+export const SLAYER_TASKS = [
+  { id: 'chickens', name: 'Chickens', monsters: ['chicken'], amount: [15, 30], level: 1, xp: 8 },
+  { id: 'cows', name: 'Cows', monsters: ['cow'], amount: [10, 25], level: 1, xp: 10 },
+  { id: 'goblins', name: 'Goblins', monsters: ['goblin'], amount: [15, 30], level: 1, xp: 12 },
+  { id: 'wolves', name: 'Wolves', monsters: ['wolf', 'alpha_wolf'], amount: [8, 20], level: 15, xp: 25 },
+  { id: 'hill_giants', name: 'Hill giants', monsters: ['hill_giant'], amount: [5, 15], level: 20, xp: 40 },
+  { id: 'bats', name: 'Bats', monsters: ['bat'], amount: [12, 25], level: 5, xp: 12 },
+  { id: 'dragons', name: 'Green dragons', monsters: ['green_dragon'], amount: [3, 8], level: 40, xp: 120 },
+];
+export const SPELLS = [
+  { id: 'wind_strike', name: 'Wind Strike', level: 1, runes: { air_rune: 1, mind_rune: 1 }, maxHit: 2, xp: 5.5, blurb: 'Basic air spell' },
+  { id: 'water_strike', name: 'Water Strike', level: 5, runes: { water_rune: 1, air_rune: 1, mind_rune: 1 }, maxHit: 4, xp: 7.5, blurb: 'Water spell' },
+  { id: 'earth_strike', name: 'Earth Strike', level: 9, runes: { earth_rune: 2, air_rune: 1, mind_rune: 1 }, maxHit: 6, xp: 9.5, blurb: 'Earth spell' },
+  { id: 'fire_strike', name: 'Fire Strike', level: 13, runes: { fire_rune: 3, air_rune: 2, mind_rune: 1 }, maxHit: 8, xp: 11.5, blurb: 'Fire spell' },
+  { id: 'wind_bolt', name: 'Wind Bolt', level: 17, runes: { air_rune: 2, chaos_rune: 1 }, maxHit: 9, xp: 13.5, blurb: 'Stronger air spell' },
+];
+export const SPELL_BY_ID = Object.fromEntries(SPELLS.map((s) => [s.id, s]));
+
+export const ACHIEVEMENTS = [
+  { id: 'first_kill', name: 'First blood', desc: 'Kill any monster', reward: { coins: 50 }, check: (g) => g.data.stats.kills >= 1 },
+  { id: 'kill_100', name: 'Slayer of beasts', desc: 'Kill 100 monsters', reward: { coins: 250 }, check: (g) => g.data.stats.kills >= 100 },
+  { id: 'mine_100', name: 'Miner', desc: 'Mine 100 ore', reward: { xp: { mining: 200 } }, check: (g) => (g.data.stats.mined || 0) >= 100 },
+  { id: 'slayer_5', name: 'Slayer apprentice', desc: 'Complete 5 Slayer tasks', reward: { coins: 200 }, check: (g) => (g.data.slayerStreak || 0) >= 5 },
+  { id: 'slayer_25', name: 'Slayer expert', desc: 'Complete 25 Slayer tasks', reward: { coins: 1000 }, check: (g) => (g.data.slayerStreak || 0) >= 25 },
+  { id: 'magic_10', name: 'Apprentice mage', desc: 'Reach Magic level 10', reward: { coins: 100 }, check: (g) => g.level('magic') >= 10 },
+  { id: 'ranged_10', name: 'Archer', desc: 'Reach Ranged level 10', reward: { coins: 100 }, check: (g) => g.level('ranged') >= 10 },
+];
 
 // ---- combat styles (melee). `bonus` = which effective level gets +3; `xp` = skills that get the 4 xp per damage.
 export const STANCES = [
@@ -116,9 +163,41 @@ add('adamant_ore', { name: 'Adamantite ore', stack: true, value: 100, art: 'ore'
 add('runite_ore', { name: 'Runite ore', stack: true, value: 300, art: 'ore', c: '#38c8d8' });
 add('logs', { name: 'Logs', stack: true, value: 4, art: 'log', c: '#b9824a' });
 add('oak_logs', { name: 'Oak logs', stack: true, value: 10, art: 'log', c: '#9a6a3a' });
-add('enchant_gem', { name: 'Enchantment gem', stack: false, value: 50, art: 'gem', c: '#b266ff' });
+add('willow_logs', { name: 'Willow logs', stack: true, value: 20, art: 'log', c: '#7a9a5a' });
+add('arrow_shaft', { name: 'Arrow shafts', stack: true, value: 1, art: 'arrow', c: '#c9a46a' });
+add('headless_arrow', { name: 'Headless arrows', stack: true, value: 2, art: 'arrow', c: '#e8d8c0' });
+// Bows
+add('shortbow', { name: 'Shortbow', stack: false, value: 50, art: 'bow', c: '#b9824a', slot: 'weapon', req: { skill: 'ranged', level: 1 }, interval: 1.8, wk: 'bow', two: true });
+add('oak_shortbow', { name: 'Oak shortbow', stack: false, value: 100, art: 'bow', c: '#9a6a3a', slot: 'weapon', req: { skill: 'ranged', level: 5 }, interval: 1.8, wk: 'bow', two: true });
+add('willow_shortbow', { name: 'Willow shortbow', stack: false, value: 200, art: 'bow', c: '#7a9a5a', slot: 'weapon', req: { skill: 'ranged', level: 20 }, interval: 1.8, wk: 'bow', two: true });
+add('longbow', { name: 'Longbow', stack: false, value: 80, art: 'bow', c: '#b9824a', slot: 'weapon', req: { skill: 'ranged', level: 5 }, interval: 2.4, wk: 'bow', two: true });
+add('oak_longbow', { name: 'Oak longbow', stack: false, value: 160, art: 'bow', c: '#9a6a3a', slot: 'weapon', req: { skill: 'ranged', level: 10 }, interval: 2.4, wk: 'bow', two: true });
+// Arrowheads (smithable)
+add('bronze_arrowtips', { name: 'Bronze arrowtips', stack: true, value: 1, art: 'arrow', c: '#d08f55' });
+add('iron_arrowtips', { name: 'Iron arrowtips', stack: true, value: 3, art: 'arrow', c: '#aab3bf' });
+add('steel_arrowtips', { name: 'Steel arrowtips', stack: true, value: 8, art: 'arrow', c: '#c9d6e3' });
+add('mithril_arrowtips', { name: 'Mithril arrowtips', stack: true, value: 20, art: 'arrow', c: '#6a8ee8' });
+// Arrows
+add('bronze_arrows', { name: 'Bronze arrows', stack: true, value: 2, art: 'arrow', c: '#d08f55' });
+add('iron_arrows', { name: 'Iron arrows', stack: true, value: 5, art: 'arrow', c: '#aab3bf' });
+add('steel_arrows', { name: 'Steel arrows', stack: true, value: 12, art: 'arrow', c: '#c9d6e3' });
+add('mithril_arrows', { name: 'Mithril arrows', stack: true, value: 30, art: 'arrow', c: '#6a8ee8' });
+// Magic staves/wands (fletched)
+add('staff', { name: 'Staff', stack: false, value: 15, art: 'staff', c: '#b9824a', slot: 'weapon', req: { skill: 'magic', level: 1 }, interval: 2.4, wk: 'staff', two: true });
+add('magic_staff', { name: 'Magic staff', stack: false, value: 200, art: 'staff', c: '#6a6ae8', slot: 'weapon', req: { skill: 'magic', level: 1 }, interval: 2.4, wk: 'staff', two: true });
+add('air_staff', { name: 'Staff of air', stack: false, value: 1500, art: 'staff', c: '#a0d0e8', slot: 'weapon', req: { skill: 'magic', level: 1 }, interval: 2.4, wk: 'staff', two: true });
+// Leather / hides
+add('cowhide', { name: 'Cowhide', stack: true, value: 3, art: 'pelt', c: '#c9b48a' });
+add('soft_leather', { name: 'Soft leather', stack: true, value: 8, art: 'pelt', c: '#e8c8a0' });
+add('hard_leather', { name: 'Hard leather', stack: true, value: 15, art: 'pelt', c: '#c9a46a' });
+add('leather_body', { name: 'Leather body', stack: false, value: 25, art: 'body', c: '#c9a46a', slot: 'body', req: { skill: 'ranged', level: 1 }, def: 10 });
+add('hardleather_body', { name: 'Hardleather body', stack: false, value: 60, art: 'body', c: '#b9824a', slot: 'body', req: { skill: 'ranged', level: 10 }, def: 18 });
+add('studded_body', { name: 'Studded body', stack: false, value: 150, art: 'body', c: '#9a6a3a', slot: 'body', req: { skill: 'ranged', level: 20 }, def: 28 });
 add('bones', { name: 'Bones', stack: true, value: 1, art: 'bones', c: '#f3ead2' });
 add('big_bones', { name: 'Big bones', stack: true, value: 8, art: 'bones', c: '#e8dcc0' });
+add('bat_bones', { name: 'Bat bones', stack: true, value: 3, art: 'bones', c: '#d8c8a8' });
+add('dragon_bones', { name: 'Dragon bones', stack: true, value: 40, art: 'bones', c: '#c8b898' });
+add('wolf_bones', { name: 'Wolf bones', stack: true, value: 6, art: 'bones', c: '#e0d4b8' });
 add('feather', { name: 'Feather', stack: true, value: 2, art: 'feather', c: '#ffffff' });
 add('wolf_pelt', { name: 'Wolf pelt', stack: true, value: 18, art: 'pelt', c: '#8a8f98' });
 for (const [i, t] of TIERS.entries()) add(TIER_BAR[i], { name: `${t.name} bar`, stack: true, value: [10, 24, 50, 100, 200, 600][i], art: 'bar', c: t.color });
@@ -180,6 +259,11 @@ export const RECIPES = [
   { id: 'iron_bar', station: 'furnace', out: 'iron_bar', inputs: { iron_ore: 1 }, level: 15, xp: 12.5, chance: 0.5 },
 ];
 for (const [id, o] of Object.entries({ steel_bar: [{ iron_ore: 1, coal: 2 }, 30, 17.5], mithril_bar: [{ mithril_ore: 1, coal: 4 }, 50, 30], adamant_bar: [{ adamant_ore: 1, coal: 6 }, 70, 37.5], rune_bar: [{ runite_ore: 1, coal: 8 }, 85, 50] })) RECIPES.push({ id, station: 'furnace', out: id, inputs: o[0], level: o[1], xp: o[2], chance: 1 });
+// Arrowtips
+RECIPES.push({ id: 'bronze_arrowtips', station: 'anvil', tier: 0, out: 'bronze_arrowtips', inputs: { bronze_bar: 1 }, level: 5, xp: 12.5, chance: 1, n: 15 });
+RECIPES.push({ id: 'iron_arrowtips', station: 'anvil', tier: 1, out: 'iron_arrowtips', inputs: { iron_bar: 1 }, level: 20, xp: 25, chance: 1, n: 15 });
+RECIPES.push({ id: 'steel_arrowtips', station: 'anvil', tier: 2, out: 'steel_arrowtips', inputs: { steel_bar: 1 }, level: 35, xp: 37.5, chance: 1, n: 15 });
+RECIPES.push({ id: 'mithril_arrowtips', station: 'anvil', tier: 3, out: 'mithril_arrowtips', inputs: { mithril_bar: 1 }, level: 55, xp: 50, chance: 1, n: 15 });
 for (const [i] of TIERS.entries()) {
   for (const [kind, k] of Object.entries(SMITH_KINDS)) {
     RECIPES.push({ id: `${TIERS[i].id}_${kind}`, station: 'anvil', tier: i, out: `${TIERS[i].id}_${kind}`, inputs: { [TIER_BAR[i]]: k.bars }, level: Math.min(99, k.smithLevel + TIER_SMITH[i]), xp: k.bars * BAR_XP[i], chance: 1 });
@@ -198,6 +282,7 @@ export const STATIONS = {
   prayer_altar: { name: 'Prayer altar', short: 'Prayer', menu: 'Prayer', blurb: 'Bury bones here for bonus Prayer XP and a chance of Enchant Points.' },
   bank: { name: 'Bank chest', short: 'Bank', menu: 'Bank' },
   store: { name: 'General store', menu: 'Shop' },
+  tanner: { name: 'Hide tanner', menu: 'Tanner', blurb: 'Tans cowhides into soft or hard leather.' },
 };
 
 // ---- monsters (melee). hp/atk/str/def are RuneScape-style levels; maxHit is the strongest hit.
@@ -207,13 +292,47 @@ export const MONSTERS = {
   cow: { name: 'Cow', level: 2, hp: 8, atk: 1, def: 1, maxHit: 1, interval: 1.8, color: '#e8e0d0', family: 'beast', defB: { stab: 0, slash: 0, crush: 5 }, epChance: 0.05,
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'raw_beef', p: 1, n: [1, 1] }, { id: 'coins', p: 0.3, n: [1, 5] }] },
   goblin: { name: 'Goblin', level: 2, hp: 5, atk: 1, def: 1, maxHit: 1, interval: 1.8, color: '#6fbf4a', family: 'humanoid', defB: { stab: 0, slash: 5, crush: 10 }, epChance: 0.06,
-    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.8, n: [3, 12] }, { id: 'bronze_dagger', p: 0.03, n: [1, 1] }, { id: 'bronze_helm', p: 0.03, n: [1, 1] }, { id: 'bronze_mace', p: 0.03, n: [1, 1] }, { id: 'bronze_scimitar', p: 0.02, n: [1, 1] }, { id: 'bronze_spear', p: 0.02, n: [1, 1] }] },
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.8, n: [3, 12] }, { id: 'bronze_dagger', p: 0.03, n: [1, 1] }, { id: 'bronze_helm', p: 0.03, n: [1, 1] }, { id: 'bronze_mace', p: 0.03, n: [1, 1] }, { id: 'bronze_scimitar', p: 0.02, n: [1, 1] }, { id: 'bronze_spear', p: 0.02, n: [1, 1] }, { id: 'clue_scroll', p: 0.02, n: [1, 1] }] },
   wolf: { name: 'Wolf', level: 25, hp: 34, atk: 22, def: 18, maxHit: 4, interval: 1.8, color: '#8a8f98', family: 'beast', defB: { stab: 15, slash: 5, crush: 25 }, epChance: 0.12,
-    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'raw_wolf', p: 0.6, n: [1, 1] }, { id: 'wolf_pelt', p: 0.5, n: [1, 1] }, { id: 'coins', p: 0.4, n: [8, 30] }, { id: 'iron_sword', p: 0.03, n: [1, 1] }, { id: 'iron_scimitar', p: 0.02, n: [1, 1] }, { id: 'iron_mace', p: 0.02, n: [1, 1] }] },
+    drops: [{ id: 'wolf_bones', p: 1, n: [1, 1] }, { id: 'raw_wolf', p: 0.6, n: [1, 1] }, { id: 'wolf_pelt', p: 0.5, n: [1, 1] }, { id: 'coins', p: 0.4, n: [8, 30] }, { id: 'iron_sword', p: 0.03, n: [1, 1] }, { id: 'iron_scimitar', p: 0.02, n: [1, 1] }, { id: 'iron_mace', p: 0.02, n: [1, 1] }] },
   alpha_wolf: { name: 'Alpha wolf', level: 38, hp: 70, atk: 35, def: 30, maxHit: 8, interval: 1.8, color: '#4a4f5a', family: 'beast', defB: { stab: 30, slash: 20, crush: 40 }, boss: true, respawn: 45, epFlat: 8, epChance: 0,
-    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'wolf_pelt', p: 1, n: [1, 2] }, { id: 'coins', p: 1, n: [60, 160] }, { id: 'iron_2h', p: 0.15, n: [1, 1] }, { id: 'iron_longsword', p: 0.15, n: [1, 1] }, { id: 'steel_scimitar', p: 0.06, n: [1, 1] }] },
+    drops: [{ id: 'wolf_bones', p: 1, n: [1, 1] }, { id: 'wolf_pelt', p: 1, n: [1, 2] }, { id: 'coins', p: 1, n: [60, 160] }, { id: 'iron_2h', p: 0.15, n: [1, 1] }, { id: 'iron_longsword', p: 0.15, n: [1, 1] }, { id: 'steel_scimitar', p: 0.06, n: [1, 1] }] },
   hill_giant: { name: 'Hill giant', level: 28, hp: 40, atk: 25, def: 25, maxHit: 7, interval: 2.1, color: '#c9a27a', family: 'giant', defB: { stab: 25, slash: 30, crush: 0 }, epChance: 0.2,
-    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'big_bones', p: 0.15, n: [1, 1] }, { id: 'coins', p: 0.9, n: [20, 80] }, { id: 'steel_sword', p: 0.03, n: [1, 1] }, { id: 'steel_warhammer', p: 0.03, n: [1, 1] }, { id: 'steel_2h', p: 0.02, n: [1, 1] }, { id: 'steel_halberd', p: 0.02, n: [1, 1] }, { id: 'iron_battleaxe', p: 0.04, n: [1, 1] }, { id: 'coal', p: 0.3, n: [1, 3] }] },
+    drops: [{ id: 'big_bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.9, n: [20, 80] }, { id: 'steel_sword', p: 0.03, n: [1, 1] }, { id: 'steel_warhammer', p: 0.03, n: [1, 1] }, { id: 'steel_2h', p: 0.02, n: [1, 1] }, { id: 'steel_halberd', p: 0.02, n: [1, 1] }, { id: 'iron_battleaxe', p: 0.04, n: [1, 1] }, { id: 'coal', p: 0.3, n: [1, 3] }] },
+  bat: { name: 'Bat', level: 5, hp: 6, atk: 3, def: 3, maxHit: 1, interval: 1.6, color: '#5a4a6a', family: 'beast', defB: { stab: 0, slash: 0, crush: 0 }, epChance: 0.04,
+    drops: [{ id: 'bat_bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.4, n: [1, 4] }] },
+  green_dragon: { name: 'Green dragon', level: 79, hp: 80, atk: 68, def: 68, maxHit: 12, interval: 2.4, color: '#3a8a4a', family: 'beast', defB: { stab: 40, slash: 40, crush: 40 }, boss: true, respawn: 60, epFlat: 15, epChance: 0,
+    drops: [{ id: 'dragon_bones', p: 1, n: [1, 1] }, { id: 'coins', p: 1, n: [200, 500] }, { id: 'steel_scimitar', p: 0.1, n: [1, 1] }] },
+  skeleton: { name: 'Skeleton', level: 22, hp: 25, atk: 18, def: 15, maxHit: 4, interval: 1.8, color: '#e8e0d0', family: 'undead', defB: { stab: 10, slash: 15, crush: 5 }, epChance: 0.08,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.7, n: [10, 40] }, { id: 'bronze_arrows', p: 0.3, n: [5, 15] }, { id: 'iron_arrows', p: 0.15, n: [3, 8] }] },
+  zombie: { name: 'Zombie', level: 18, hp: 22, atk: 15, def: 12, maxHit: 3, interval: 1.8, color: '#6a8a5a', family: 'undead', defB: { stab: 5, slash: 10, crush: 8 }, epChance: 0.07,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.6, n: [8, 30] }, { id: 'air_rune', p: 0.2, n: [3, 8] }, { id: 'mind_rune', p: 0.15, n: [2, 6] }] },
+  imp: { name: 'Imp', level: 5, hp: 8, atk: 4, def: 4, maxHit: 1, interval: 1.5, color: '#d8453c', family: 'beast', defB: { stab: 0, slash: 0, crush: 0 }, epChance: 0.05,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.5, n: [2, 8] }, { id: 'fire_rune', p: 0.25, n: [2, 5] }, { id: 'mind_rune', p: 0.2, n: [1, 4] }] },
+  giant_rat: { name: 'Giant rat', level: 6, hp: 10, atk: 5, def: 4, maxHit: 1, interval: 1.6, color: '#8a7a6a', family: 'beast', defB: { stab: 0, slash: 2, crush: 0 }, epChance: 0.04,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.4, n: [1, 5] }, { id: 'raw_rat', p: 0.5, n: [1, 1] }] },
+  scorpion: { name: 'Scorpion', level: 14, hp: 17, atk: 11, def: 11, maxHit: 2, interval: 1.7, color: '#c8a050', family: 'beast', defB: { stab: 5, slash: 5, crush: 10 }, epChance: 0.06,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.5, n: [5, 15] }] },
+  al_kharid_warrior: { name: 'Al Kharid warrior', level: 9, hp: 19, atk: 7, def: 4, maxHit: 2, interval: 1.8, color: '#e8c070', family: 'humanoid', defB: { stab: 5, slash: 8, crush: 5 }, epChance: 0.07,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.8, n: [10, 30] }, { id: 'bronze_scimitar', p: 0.05, n: [1, 1] }, { id: 'iron_scimitar', p: 0.02, n: [1, 1] }] },
+  wizard: { name: 'Wizard', level: 9, hp: 12, atk: 8, def: 5, maxHit: 3, interval: 2.0, color: '#6a6ae8', family: 'humanoid', defB: { stab: 0, slash: 0, crush: 0 }, epChance: 0.1,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'air_rune', p: 0.6, n: [5, 12] }, { id: 'mind_rune', p: 0.5, n: [3, 8] }, { id: 'water_rune', p: 0.3, n: [2, 6] }, { id: 'coins', p: 0.4, n: [5, 20] }] },
+  dark_wizard: { name: 'Dark wizard', level: 20, hp: 24, atk: 16, def: 10, maxHit: 5, interval: 2.0, color: '#4a3a6a', family: 'humanoid', defB: { stab: 5, slash: 5, crush: 5 }, epChance: 0.15,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'air_rune', p: 0.7, n: [8, 18] }, { id: 'mind_rune', p: 0.6, n: [5, 12] }, { id: 'earth_rune', p: 0.4, n: [4, 10] }, { id: 'fire_rune', p: 0.3, n: [3, 8] }, { id: 'chaos_rune', p: 0.15, n: [1, 3] }, { id: 'coins', p: 0.5, n: [15, 40] }] },
+  moss_giant: { name: 'Moss giant', level: 42, hp: 60, atk: 30, def: 30, maxHit: 6, interval: 2.1, color: '#4a6a3a', family: 'giant', defB: { stab: 20, slash: 25, crush: 15 }, epChance: 0.12,
+    drops: [{ id: 'big_bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.8, n: [30, 80] }, { id: 'steel_sword', p: 0.05, n: [1, 1] }, { id: 'steel_arrows', p: 0.2, n: [5, 15] }, { id: 'nature_rune', p: 0.15, n: [3, 8] }] },
+  fire_giant: { name: 'Fire giant', level: 86, hp: 111, atk: 65, def: 65, maxHit: 11, interval: 2.4, color: '#d8453c', family: 'giant', defB: { stab: 30, slash: 35, crush: 25 }, epChance: 0.18,
+    drops: [{ id: 'big_bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.9, n: [50, 150] }, { id: 'fire_rune', p: 0.4, n: [10, 25] }, { id: 'steel_2h', p: 0.04, n: [1, 1] }, { id: 'rune_scimitar', p: 0.01, n: [1, 1] }] },
+  greater_demon: { name: 'Greater demon', level: 92, hp: 87, atk: 76, def: 81, maxHit: 10, interval: 2.4, color: '#8a2a2a', family: 'beast', defB: { stab: 40, slash: 40, crush: 40 }, epChance: 0.2,
+    drops: [{ id: 'ashes', p: 1, n: [1, 1] }, { id: 'coins', p: 0.8, n: [40, 120] }, { id: 'death_rune', p: 0.3, n: [3, 8] }, { id: 'rune_full_helm', p: 0.02, n: [1, 1] }] },
+  black_demon: { name: 'Black demon', level: 172, hp: 157, atk: 145, def: 152, maxHit: 16, interval: 2.4, color: '#2a1a1a', family: 'beast', defB: { stab: 50, slash: 50, crush: 50 }, epChance: 0.25,
+    drops: [{ id: 'ashes', p: 1, n: [1, 1] }, { id: 'coins', p: 0.9, n: [100, 300] }, { id: 'death_rune', p: 0.4, n: [5, 12] }, { id: 'rune_chainbody', p: 0.015, n: [1, 1] }] },
+  steel_dragon: { name: 'Steel dragon', level: 246, hp: 160, atk: 210, def: 210, maxHit: 22, interval: 2.4, color: '#c9d6e3', family: 'beast', defB: { stab: 60, slash: 60, crush: 60 }, boss: true, respawn: 45, epFlat: 20, epChance: 0,
+    drops: [{ id: 'dragon_bones', p: 1, n: [1, 1] }, { id: 'steel_bar', p: 0.8, n: [2, 5] }, { id: 'coins', p: 1, n: [200, 600] }, { id: 'rune_platelegs', p: 0.02, n: [1, 1] }] },
+  iron_dragon: { name: 'Iron dragon', level: 189, hp: 165, atk: 165, def: 165, maxHit: 17, interval: 2.4, color: '#aab3bf', family: 'beast', defB: { stab: 50, slash: 50, crush: 50 }, boss: true, respawn: 40, epFlat: 12, epChance: 0,
+    drops: [{ id: 'dragon_bones', p: 1, n: [1, 1] }, { id: 'iron_bar', p: 0.7, n: [2, 5] }, { id: 'coins', p: 1, n: [150, 400] }, { id: 'rune_axe', p: 0.015, n: [1, 1] }] },
+  bronze_dragon: { name: 'Bronze dragon', level: 131, hp: 102, atk: 112, def: 112, maxHit: 14, interval: 2.4, color: '#d08f55', family: 'beast', defB: { stab: 40, slash: 40, crush: 40 }, boss: true, respawn: 35, epFlat: 8, epChance: 0,
+    drops: [{ id: 'dragon_bones', p: 1, n: [1, 1] }, { id: 'bronze_bar', p: 0.6, n: [2, 5] }, { id: 'coins', p: 1, n: [100, 300] }, { id: 'rune_longsword', p: 0.02, n: [1, 1] }] },
 };
 // ---- resource nodes. chance = base success per attempt at the required level (+1.2% per level above, capped 90%).
 export const NODES = {
@@ -226,6 +345,8 @@ export const NODES = {
   adamant: { name: 'Adamantite rocks', skill: 'mining', tool: 'pickaxe', level: 70, xp: 95, item: 'adamant_ore', interval: 3.2, respawn: 12, chance: 0.3, color: '#3aa05a' },
   runite: { name: 'Runite rocks', skill: 'mining', tool: 'pickaxe', level: 85, xp: 125, item: 'runite_ore', interval: 3.6, respawn: 20, chance: 0.25, color: '#38c8d8' },
   oak: { name: 'Oak tree', skill: 'woodcutting', tool: 'axe', level: 15, xp: 37.5, item: 'oak_logs', interval: 2.6, respawn: 7, chance: 0.4, color: '#2f8a3a' },
+  willow: { name: 'Willow tree', skill: 'woodcutting', tool: 'axe', level: 30, xp: 67.5, item: 'willow_logs', interval: 2.8, respawn: 8, chance: 0.35, color: '#3a7a4a' },
+  rune_essence: { name: 'Rune essence rocks', skill: 'mining', tool: 'pickaxe', level: 1, xp: 5, item: 'rune_essence', interval: 2.0, respawn: 3, chance: 0.6, color: '#c8c0a8' },
 };
 
 export const FISH_NODES = {
@@ -243,25 +364,67 @@ Object.assign(NODES, FISH_NODES);
 export const nodeYields = (n) => n.yields || [{ item: n.item, level: n.level, xp: n.xp }];
 // ---- areas: side-scrolling maps. entities: [type, kind, x]  (type: monster|node|station|sign)
 export const AREAS = {
-  meadow: {
-    name: 'Starter Meadow', width: 2300, spawn: 160, req: { combat: 1 }, sky: ['#bfe8ff', '#e8f7ff'], hill: ['#8fd48a', '#6fbf6a'], ground: '#59b857',
-    entities: [['station', 'altar', 225], ['station', 'prayer_altar', 380], ['station', 'bank', 520], ['station', 'store', 640], ['station', 'range', 760], ['station', 'furnace', 860], ['station', 'anvil', 960],
-      ['node', 'pond', 830], ['node', 'tree', 930], ['node', 'tree', 1020], ['station', 'fire', 1100], ['node', 'copper', 1190], ['node', 'tin', 1270],
-      ['monster', 'chicken', 1430], ['monster', 'chicken', 1510], ['monster', 'cow', 1650], ['monster', 'cow', 1730], ['monster', 'goblin', 1870], ['monster', 'goblin', 1960], ['sign', 'quarry', 2190]],
+  lumby: {
+    name: 'Lumby', width: 2400, spawn: 200, req: null, sky: ['#bfe8ff', '#e8f7ff'], hill: ['#8fd48a', '#6fbf6a'], ground: '#59b857',
+    entities: [
+      ['station', 'altar', 180], ['station', 'prayer_altar', 280], ['station', 'bank', 420], ['station', 'store', 560],
+      ['station', 'range', 800], ['station', 'furnace', 920], ['station', 'anvil', 1040],
+      ['node', 'pond', 1160], ['node', 'tree', 1260], ['node', 'tree', 1360], ['station', 'fire', 1460],
+      ['node', 'copper', 1560], ['node', 'tin', 1640],
+      ['monster', 'chicken', 1740], ['monster', 'chicken', 1820], ['monster', 'cow', 1920], ['monster', 'cow', 2000],
+      ['monster', 'goblin', 2100], ['monster', 'goblin', 2180], ['monster', 'imp', 2260],
+      ['sign', 'draynor', 2350]
+    ],
   },
-  quarry: {
-    name: 'Stony Quarry', width: 2300, spawn: 160, req: { combat: 10 }, sky: ['#d7d3cf', '#efe9e1'], hill: ['#b7ada0', '#9b9186'], ground: '#a08e78',
-    entities: [['sign', 'meadow', 70], ['node', 'iron', 400], ['node', 'iron', 490], ['node', 'coal', 580], ['node', 'coal', 660], ['node', 'oak', 770], ['node', 'oak', 850], ['station', 'fire', 930], ['node', 'stream', 1030],
-      ['monster', 'wolf', 1180], ['monster', 'wolf', 1350], ['monster', 'alpha_wolf', 1540], ['node', 'deep', 1720], ['node', 'cage', 1820], ['node', 'copper', 1950], ['node', 'tin', 2030], ['sign', 'peaks', 2220]],
+  draynor: {
+    name: 'Draynor', width: 2200, spawn: 160, req: null, sky: ['#c8e0c8', '#e8f0e8'], hill: ['#6a9a5a', '#4a7a3a'], ground: '#5a8a4a',
+    entities: [
+      ['sign', 'lumby', 80], ['station', 'bank', 280], ['station', 'store', 420],
+      ['node', 'willow', 560], ['node', 'willow', 660], ['node', 'oak', 780],
+      ['monster', 'zombie', 980], ['monster', 'zombie', 1080], ['monster', 'skeleton', 1200],
+      ['monster', 'giant_rat', 1340], ['monster', 'giant_rat', 1440],
+      ['node', 'iron', 1600], ['node', 'coal', 1700],
+      ['sign', 'alkharid', 2100]
+    ],
   },
-  peaks: {
-    name: 'Windy Peaks', width: 2000, spawn: 160, req: { combat: 20 }, sky: ['#cfe3f5', '#f1f7fc'], hill: ['#a9b8c9', '#8a9bb0'], ground: '#8f9aa6',
-    entities: [['sign', 'quarry', 70], ['node', 'coal', 300], ['node', 'coal', 380], ['node', 'mithril', 560], ['node', 'mithril', 640], ['node', 'adamant', 830], ['node', 'adamant', 910], ['node', 'runite', 1060],
-      ['monster', 'hill_giant', 1240], ['monster', 'hill_giant', 1420], ['monster', 'hill_giant', 1600], ['station', 'fire', 1790]],
+  alkharid: {
+    name: 'Al Kharid', width: 2300, spawn: 160, req: null, sky: ['#f0e0a0', '#f8f0c8'], hill: ['#d0b060', '#b09040'], ground: '#c8a050',
+    entities: [
+      ['sign', 'draynor', 80], ['station', 'bank', 300], ['station', 'store', 450], ['station', 'tanner', 560],
+      ['node', 'copper', 600], ['node', 'tin', 700], ['node', 'iron', 850], ['node', 'iron', 950],
+      ['monster', 'scorpion', 1150], ['monster', 'scorpion', 1250], ['monster', 'al_kharid_warrior', 1400],
+      ['monster', 'al_kharid_warrior', 1500],
+      ['node', 'coal', 1700], ['node', 'mithril', 1850],
+      ['sign', 'mage_tower', 2200]
+    ],
+  },
+  mage_tower: {
+    name: 'Mage Tower', width: 1800, spawn: 140, req: null, sky: ['#a0c0e8', '#c8e0f8'], hill: ['#6a8ab0', '#4a6a90'], ground: '#5a7a9a',
+    entities: [
+      ['sign', 'alkharid', 70], ['station', 'altar', 250],
+      ['monster', 'wizard', 450], ['monster', 'wizard', 550], ['monster', 'dark_wizard', 700],
+      ['node', 'rune_essence', 900], ['node', 'rune_essence', 1000],
+      ['monster', 'imp', 1200], ['monster', 'imp', 1300],
+      ['station', 'fire', 1500]
+    ],
+  },
+  brimhaven_dungeon: {
+    name: 'Brimhaven Dungeon', width: 2600, spawn: 150, req: null, sky: ['#4a3a2a', '#6a5a4a'], hill: ['#3a2a1a', '#2a1a0a'], ground: '#5a4a3a',
+    entities: [
+      ['sign', 'alkharid', 80],
+      ['monster', 'moss_giant', 300], ['monster', 'moss_giant', 420],
+      ['monster', 'fire_giant', 560], ['monster', 'fire_giant', 680],
+      ['monster', 'greater_demon', 840], ['monster', 'greater_demon', 960],
+      ['monster', 'black_demon', 1120], ['monster', 'black_demon', 1240],
+      ['monster', 'steel_dragon', 1420], ['monster', 'steel_dragon', 1540],
+      ['monster', 'iron_dragon', 1700], ['monster', 'iron_dragon', 1820],
+      ['monster', 'bronze_dragon', 1980],
+      ['station', 'fire', 2200]
+    ],
   },
 };
 export const AREA_IDS = Object.keys(AREAS);
-export const START_AREA = 'meadow';
+export const START_AREA = 'lumby';
 export const BAG_SLOTS = 28;
-export const SHOP_BUY = ['hammer', 'bronze_pickaxe', 'bronze_axe', 'iron_pickaxe', 'iron_axe', 'bronze_dagger', 'bronze_scimitar', 'bronze_mace', 'small_net', 'fishing_rod', 'harpoon', 'lobster_pot', 'feather'];
+export const SHOP_BUY = ['hammer', 'bronze_pickaxe', 'bronze_axe', 'iron_pickaxe', 'iron_axe', 'bronze_dagger', 'bronze_scimitar', 'bronze_mace', 'small_net', 'fishing_rod', 'harpoon', 'lobster_pot', 'feather', 'shortbow', 'oak_shortbow', 'bronze_arrows', 'iron_arrows', 'air_rune', 'mind_rune', 'water_rune', 'earth_rune', 'fire_rune', 'chaos_rune', 'rune_essence'];
 export const SELL_RATE = 0.5;

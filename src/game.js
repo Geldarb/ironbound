@@ -1,5 +1,5 @@
 // Game model: character state + the traversable-area simulation. No DOM here (the UI listens to `game.on`).
-import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood, stanceXp, PRAYERS, PRAYER_BY_ID, BONE_XP, BONES } from './data.js';
+import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood, stanceXp, PRAYERS, PRAYER_BY_ID, BONE_XP, BONES, SLAYER_TASKS, SPELLS, SPELL_BY_ID, ACHIEVEMENTS } from './data.js';
 import { levelForXp } from './xp.js';
 import { heroCombat, heroHitChance, monsterHitChance, combatLevel } from './combat.js';
 import { sumMods, rollEnchant, rollCost, nextPity, enchantCategory, gemFromMod, canCombineGems, combineGems as combineGemData, maxMods, MODS } from './enchant.js';
@@ -23,10 +23,10 @@ export class Game {
     this.eatCd = 0;
     this.prayerDrainT = 0;
     const d = this.data;
-    d.equipEnch ||= {}; d.bankGear ||= []; d.visitedAreas ||= { meadow: true }; d.ep ??= 0; d.pity ??= 0;
+    d.equipEnch ||= {}; d.bankGear ||= []; d.visitedAreas ||= { lumby: true }; d.ep ??= 0; d.pity ??= 0;
     d.prayerPoints ??= this.maxPrayer;
     d.activePrayers ||= [];
-    this.data.area = AREAS[this.data.area] ? this.data.area : 'meadow';
+    this.data.area = AREAS[this.data.area] ? this.data.area : 'lumby';
     this.enterArea(this.data.area, AREAS[this.data.area].spawn, true);
     this.data.hp = Math.min(this.data.hp || this.maxHp, this.maxHp);
   }
@@ -111,7 +111,218 @@ export class Game {
   }
   bestTool(type) { return this.toolInfo(type)?.item || null; }
 
-  // ---- food / eating
+  // ---- Slayer
+  get slayerTask() { return this.data.slayerTask; }
+  requestSlayerTask() {
+    if (this.data.slayerTask) { this.toast('You already have a task'); return false; }
+    const eligible = SLAYER_TASKS.filter((t) => this.level('slayer') >= t.level);
+    if (!eligible.length) { this.toast('No tasks available'); return false; }
+    const t = eligible[Math.floor(this.rng() * eligible.length)];
+    const amount = t.amount[0] + Math.floor(this.rng() * (t.amount[1] - t.amount[0] + 1));
+    this.data.slayerTask = { id: t.id, name: t.name, monsters: t.monsters, left: amount, total: amount, xp: t.xp };
+    this.toast(`New task: Kill ${amount} ${t.name}`);
+    this.emit('change');
+    return true;
+  }
+  cancelSlayerTask() {
+    if (!this.data.slayerTask) return false;
+    this.data.slayerTask = null;
+    this.data.slayerStreak = 0;
+    this.toast('Task cancelled');
+    this.emit('change');
+    return true;
+  }
+
+  // ---- Magic
+  canCast(spellId) {
+    const sp = SPELL_BY_ID[spellId];
+    if (!sp) return false;
+    if (this.level('magic') < sp.level) return false;
+    for (const [rune, n] of Object.entries(sp.runes)) if (this.count(rune) < n) return false;
+    return true;
+  }
+  castSpell(spellId, target) {
+    const sp = SPELL_BY_ID[spellId];
+    if (!sp || !this.canCast(spellId)) { this.toast('Cannot cast'); return false; }
+    for (const [rune, n] of Object.entries(sp.runes)) this.removeItem(rune, n);
+    this.gain('magic', sp.xp);
+    if (target?.type === 'monster') {
+      const dmg = Math.floor(Math.random() * (sp.maxHit + 1));
+      this.hitMonster(target, dmg, {});
+    }
+    this.toast(`Cast ${sp.name}`);
+    this.emit('change');
+    return true;
+  }
+
+  // ---- Energy & Special
+  get energy() { return this.data.energy || 100; }
+  get special() { return this.data.special || 100; }
+  useSpecial() {
+    if (this.special < 25) { this.toast('Not enough special'); return false; }
+    this.data.special = Math.max(0, this.special - 25);
+    this.toast('Special attack used (+damage)');
+    this.emit('change');
+    return true;
+  }
+  regenEnergy(dt) {
+    if (this.data.energy < 100) this.data.energy = Math.min(100, this.data.energy + dt * 1.5);
+    if (this.data.special < 100) this.data.special = Math.min(100, this.data.special + dt * 0.5);
+  }
+  drainEnergy(dt, running) {
+    if (running && this.data.energy > 0) this.data.energy = Math.max(0, this.data.energy - dt * 8);
+  }
+
+  // ---- Achievements
+  checkAchievements() {
+    for (const a of ACHIEVEMENTS) {
+      if (this.data.achievements[a.id]) continue;
+      if (a.check(this)) {
+        this.data.achievements[a.id] = true;
+        if (a.reward.coins) this.data.coins += a.reward.coins;
+        if (a.reward.xp) for (const [sk, n] of Object.entries(a.reward.xp)) this.gain(sk, n);
+        this.toast(`Achievement: ${a.name}`);
+      }
+    }
+  }
+
+  // ---- Clue scrolls
+  openClue() {
+    if (!this.count('clue_scroll')) return false;
+    this.removeItem('clue_scroll', 1);
+    const roll = this.rng();
+    if (roll < 0.05) {
+      this.addItem('enchant_gem', 1);
+      this.toast('Clue reward: Enchantment gem!');
+    } else if (roll < 0.15) {
+      const coins = 200 + Math.floor(this.rng() * 400);
+      this.data.coins += coins;
+      this.toast(`Clue reward: ${coins} coins`);
+    } else {
+      const coins = 50 + Math.floor(this.rng() * 150);
+      this.data.coins += coins;
+      this.toast(`Clue reward: ${coins} coins`);
+    }
+    this.emit('change');
+    return true;
+  }
+
+  // ---- Fletching (RS-style)
+  fletchShafts() {
+    if (this.count('logs') < 1) { this.toast('Need logs'); return false; }
+    this.removeItem('logs', 1);
+    this.gain('fletching', 5);
+    this.addItem('arrow_shaft', 15);
+    this.toast('Cut 15 arrow shafts');
+    this.emit('change');
+    return true;
+  }
+  makeHeadless() {
+    const n = Math.min(this.count('arrow_shaft'), this.count('feather'));
+    if (n < 1) { this.toast('Need shafts and feathers'); return false; }
+    this.removeItem('arrow_shaft', n);
+    this.removeItem('feather', n);
+    this.gain('fletching', n * 1);
+    this.addItem('headless_arrow', n);
+    this.toast(`Made ${n} headless arrows`);
+    this.emit('change');
+    return true;
+  }
+  tipArrows(tipId, arrowId, xp = 2.5) {
+    const n = Math.min(this.count('headless_arrow'), this.count(tipId));
+    if (n < 1) { this.toast('Need headless arrows and arrowtips'); return false; }
+    this.removeItem('headless_arrow', n);
+    this.removeItem(tipId, n);
+    this.gain('fletching', n * xp);
+    this.addItem(arrowId, n);
+    this.toast(`Made ${n} ${ITEMS[arrowId].name}`);
+    this.emit('change');
+    return true;
+  }
+  fletchBow(logId, bowId, level, xp) {
+    if (this.level('fletching') < level) { this.toast(`Need Fletching ${level}`); return false; }
+    if (this.count(logId) < 1) { this.toast('Need logs'); return false; }
+    this.removeItem(logId, 1);
+    this.gain('fletching', xp);
+    this.addItem(bowId, 1);
+    this.toast(`Fletched ${ITEMS[bowId].name}`);
+    this.emit('change');
+    return true;
+  }
+  fletchStaff() {
+    if (this.count('logs') < 1) { this.toast('Need logs'); return false; }
+    this.removeItem('logs', 1);
+    this.gain('fletching', 12.5);
+    this.addItem('staff', 1);
+    this.toast('Fletched a staff');
+    this.emit('change');
+    return true;
+  }
+
+  // ---- Tanner
+  tanHide(type) {
+    if (this.count('cowhide') < 1) { this.toast('Need a cowhide'); return false; }
+    const cost = type === 'soft' ? 1 : 3;
+    if (this.data.coins < cost) { this.toast('Not enough coins'); return false; }
+    this.removeItem('cowhide', 1);
+    this.data.coins -= cost;
+    this.addItem(type === 'soft' ? 'soft_leather' : 'hard_leather', 1);
+    this.toast(`Tanned ${type} leather`);
+    this.emit('change');
+    return true;
+  }
+
+  // ---- Crafting leather armor
+  craftLeatherArmor(type) {
+    const reqs = {
+      leather_body: { leather: 1, level: 1, xp: 25 },
+      hardleather_body: { hard_leather: 1, level: 10, xp: 35 },
+      studded_body: { hard_leather: 1, steel_studs: 1, level: 20, xp: 40 },
+    };
+    const r = reqs[type];
+    if (!r || this.level('crafting') < r.level) { this.toast('Cannot craft'); return false; }
+    for (const [id, n] of Object.entries(r)) if (id !== 'level' && id !== 'xp' && this.count(id) < n) { this.toast('Missing materials'); return false; }
+    for (const [id, n] of Object.entries(r)) if (id !== 'level' && id !== 'xp') this.removeItem(id, n);
+    this.gain('crafting', r.xp);
+    this.addItem(type, 1);
+    this.toast(`Crafted ${ITEMS[type].name}`);
+    this.emit('change');
+    return true;
+  }
+
+  // ---- Magic autocast
+  setAutocast(spellId) {
+    if (spellId && !this.canCast(spellId)) { this.toast('Cannot autocast that'); return false; }
+    this.data.autocast = spellId || null;
+    this.toast(spellId ? `Autocasting ${SPELL_BY_ID[spellId].name}` : 'Autocast off');
+    this.emit('change');
+    return true;
+  }
+
+  // ---- Runecrafting
+  craftRune(runeId) {
+    const costs = { air_rune: 1, mind_rune: 1, water_rune: 2, earth_rune: 2, fire_rune: 3, chaos_rune: 5 };
+    const xp = { air_rune: 5, mind_rune: 5.5, water_rune: 6, earth_rune: 6.5, fire_rune: 7, chaos_rune: 8.5 };
+    const need = costs[runeId];
+    if (!need || this.count('rune_essence') < need) { this.toast('Need more rune essence'); return false; }
+    this.removeItem('rune_essence', need);
+    this.gain('runecrafting', xp[runeId] || 5);
+    this.addItem(runeId, 1);
+    this.toast(`Crafted ${ITEMS[runeId].name}`);
+    this.emit('change');
+    return true;
+  }
+
+  // ---- Crafting
+  craftLeather() {
+    if (this.count('wolf_pelt') < 1) { this.toast('Need a wolf pelt'); return false; }
+    this.removeItem('wolf_pelt', 1);
+    this.gain('crafting', 15);
+    this.addItem('leather', 1);
+    this.toast('Crafted leather');
+    this.emit('change');
+    return true;
+  }
   /** best food in the bag (highest healing) or null */
   bestFood() { let best = null; for (const s of this.data.bag) { const it = ITEMS[s.id]; if (isFood(s.id) && (!best || it.heal > best.heal)) best = it; } return best; }
   get foodCount() { return this.data.bag.reduce((a, s) => a + (isFood(s.id) ? s.n : 0), 0); }
@@ -417,10 +628,9 @@ export class Game {
     if (!silent) this.emit('area', { area: areaId });
     this.emit('change');
   }
-  areaUnlocked(areaId) { return this.combatLevel >= (AREAS[areaId].req.combat || 0); }
+  areaUnlocked(areaId) { return true; }
   travel(areaId, x) {
     if (!AREAS[areaId]) return false;
-    if (!this.areaUnlocked(areaId)) { this.toast(`${AREAS[areaId].name} needs combat level ${AREAS[areaId].req.combat}`); return false; }
     this.enterArea(areaId, x ?? AREAS[areaId].spawn);
     this.toast(`Arrived: ${AREAS[areaId].name}`);
     if (!this.data.visitedAreas[areaId]) { this.data.visitedAreas[areaId] = true; this.addEp(10, `first visit to ${AREAS[areaId].name}`); this.toast('First visit: +10 Enchant Points'); }
@@ -468,7 +678,11 @@ export class Game {
     const moveTo = (x) => {
       const d = x - h.x;
       if (Math.abs(d) < 3) return true;
-      h.dir = Math.sign(d); h.x += h.dir * Math.min(Math.abs(d), WALK_SPEED * dt); h.state = 'walk'; return false;
+      const running = this.data.energy > 5;
+      const speed = running ? WALK_SPEED * 1.6 : WALK_SPEED;
+      h.dir = Math.sign(d); h.x += h.dir * Math.min(Math.abs(d), speed * dt); h.state = 'walk';
+      if (running) this.drainEnergy(dt, true);
+      return false;
     };
     if (t) {
       const reach = REACH[t.type] + (t.type === 'monster' ? this.combat.reach : 0);
@@ -507,14 +721,34 @@ export class Game {
         this.emit('change');
       }
     } else this.prayerDrainT = 0;
+
+    this.regenEnergy(dt);
   }
 
   fight(m, dt) {
     const h = this.hero, def = MONSTERS[m.kind], hc = this.combat;
     h.state = 'attack';
     if (h.cd <= 0) {
+      const wep = ITEMS[this.data.equip.weapon];
+      // Ammo consumption for bows
+      if (wep?.wk === 'bow') {
+        const ammo = ['mithril_arrows', 'steel_arrows', 'iron_arrows', 'bronze_arrows'].find((id) => this.count(id) > 0);
+        if (!ammo) { this.toast('Out of arrows'); this.clearTarget(); return false; }
+        this.removeItem(ammo, 1);
+      }
+      // Autocast rune consumption
+      if (this.data.autocast && wep?.wk === 'staff') {
+        const sp = SPELL_BY_ID[this.data.autocast];
+        if (sp && this.canCast(sp.id)) {
+          for (const [rune, n] of Object.entries(sp.runes)) this.removeItem(rune, n);
+          this.gain('magic', sp.xp);
+        } else {
+          this.toast('Cannot autocast');
+          this.data.autocast = null;
+        }
+      }
       h.cd = hc.interval; h.swing = h.swingDur = Math.min(0.45, hc.interval * 0.6);
-      this.emit('swing', { kind: ITEMS[this.data.equip.weapon]?.wk || 'unarmed', type: hc.type, two: hc.two });
+      this.emit('swing', { kind: wep?.wk || 'unarmed', type: hc.type, two: hc.two });
       const hit = this.rng() < heroHitChance(hc, def);
       let dmg = hit ? Math.floor(this.rng() * (hc.maxHit + 1)) : 0;
       const mods = hc.mods;
@@ -530,7 +764,9 @@ export class Game {
     if (m.cd <= 0 && m.dead <= 0) {
       m.cd = def.interval; m.swing = 0.3;
       const hit = this.rng() < monsterHitChance(hc, def);
-      const dmg = hit ? Math.floor(this.rng() * (def.maxHit + 1)) : 0;
+      let dmg = hit ? Math.floor(this.rng() * (def.maxHit + 1)) : 0;
+      // Protect prayers
+      if (this.data.activePrayers.includes('protect_from_melee')) dmg = Math.floor(dmg * 0.5);
       this.data.hp = Math.max(0, this.data.hp - dmg);
       if (dmg > 0) h.hurt = 0.3;
       this.emit('hit', { who: 'hero', x: h.x, dmg, miss: dmg === 0 });
@@ -552,6 +788,20 @@ export class Game {
     }
     if (m.hp <= 0) {
       m.dead = def.respawn || 6; this.data.stats.kills++;
+      // Slayer task progress
+      const task = this.data.slayerTask;
+      if (task && task.monsters.includes(m.kind) && task.left > 0) {
+        task.left--;
+        this.gain('slayer', task.xp);
+        if (task.left <= 0) {
+          const coins = 50 + this.level('slayer') * 10;
+          this.data.coins += coins;
+          this.data.slayerStreak = (this.data.slayerStreak || 0) + 1;
+          this.toast(`Slayer task complete! +${coins} coins`);
+          this.data.slayerTask = null;
+        }
+        this.emit('change');
+      }
       this.emit('kill', { id: m.id, kind: m.kind, x: m.x });
       const dropMod = 1 + this.mods.drop;
       for (const d of def.drops) {

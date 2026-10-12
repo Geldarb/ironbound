@@ -1,5 +1,5 @@
 // DOM UI: HUD, target panel, stance row, nav + bottom sheets (gear, skills, bag/bank/shop, craft, map, settings).
-import { SKILLS, SKILL_BY_ID, STANCES, SLOTS, ITEMS, NODES, MONSTERS, AREAS, AREA_IDS, RECIPES, STATIONS, SHOP_BUY, BAG_SLOTS, TIERS, XP_RATE, WEAPON_KINDS, TIER_BAR, OFFLINE, nodeYields, burnChance, isFood, isStackable, PRAYERS, BONE_XP, BONES } from './data.js';
+import { SKILLS, SKILL_BY_ID, STANCES, SLOTS, ITEMS, NODES, MONSTERS, AREAS, AREA_IDS, RECIPES, STATIONS, SHOP_BUY, BAG_SLOTS, TIERS, XP_RATE, WEAPON_KINDS, TIER_BAR, OFFLINE, nodeYields, burnChance, isFood, isStackable, PRAYERS, BONE_XP, BONES, SLAYER_TASKS, SLAYER_MASTER, SPELLS, ACHIEVEMENTS } from './data.js';
 import { levelProgress, xpForLevel } from './xp.js';
 import { RARITIES, rarityOf, modText, rollCost, enchantCategory, isEnchantable, PITY_EPIC, gemText, canCombineGems } from './enchant.js';
 import { heroHitChance, weaponKind } from './combat.js';
@@ -36,6 +36,7 @@ export class UI {
       else if (p.kind === 'fire' || p.kind === 'range') { this.craftMenu = 'cook'; this.open('craft'); }
       else if (p.kind === 'bank') this.open('bag', { bank: true });
       else if (p.kind === 'store') this.open('bag', { shop: true });
+      else if (p.kind === 'tanner') this.openTanner();
     } else if (t === 'area') this.close();
     if (t === 'change' || t === 'xp' || t === 'hp' || t === 'level' || t === 'target') this.dirty = true;
   }
@@ -149,7 +150,13 @@ export class UI {
     }
     b.appendChild(el('p', 'note', 'Equip gear from your Bag. Smith it at the anvil in Starter Meadow. Higher tiers need more Attack/Defence.'));
   }
-  r_prayer(b) {
+  openTanner() {
+    const g = this.g;
+    const c = this.modal(`<h3>Hide tanner</h3><p class="note">Tan cowhides into leather.</p><div class="btns"><button class="btn gold" id="tanSoft">Soft leather (1 coin)</button><button class="btn gold" id="tanHard">Hard leather (3 coins)</button><button class="btn" id="tanX">Close</button></div>`);
+    c.querySelector('#tanSoft').onclick = () => { g.tanHide('soft'); this.closeModal(); };
+    c.querySelector('#tanHard').onclick = () => { g.tanHide('hard'); this.closeModal(); };
+    c.querySelector('#tanX').onclick = () => this.closeModal();
+  }
     const g = this.g;
     b.appendChild(el('div', 'row', `<div class="tx"><b>Prayer altar</b><small>Offer bones here for double Prayer XP and a chance of Enchant Points.</small></div>`));
     b.appendChild(el('div', 'note', `Prayer points ${g.prayerPoints}/${g.maxPrayer} · ✨ ${g.ep} EP`));
@@ -187,6 +194,49 @@ export class UI {
       const xp = g.data.xp[s.id], lv = g.level(s.id);
       const r = el('div', 'row', `<div class="tx"><b>${s.name} <span style="float:right;color:var(--gold)">${lv}</span></b><small>${lv >= 99 ? 'Max level' : `${fmt(xp)} xp · ${fmt(xpForLevel(lv + 1) - xp)} to next`}</small><div class="xpbar"><i style="width:${Math.round(levelProgress(xp) * 100)}%;background:${s.color}"></i></div></div>`);
       r.dataset.skill = s.id; b.appendChild(r);
+    }
+    const task = g.slayerTask;
+    b.appendChild(el('div', 'note', `<b>Slayer</b> · Streak ${g.data.slayerStreak || 0}`));
+    if (task) {
+      b.appendChild(el('div', 'row', `<div class="tx"><b>${task.name}</b><small>${task.left} / ${task.total} left</small></div><button class="btn sm" id="cancelTask">Cancel</button>`));
+      const c = b.querySelector('#cancelTask'); if (c) c.onclick = () => g.cancelSlayerTask();
+    } else {
+      const btn = el('button', 'btn gold', 'Get task'); btn.onclick = () => g.requestSlayerTask(); b.appendChild(btn);
+    }
+    b.appendChild(el('div', 'note', `<b>Energy</b> ${Math.round(g.energy)}% · <b>Special</b> ${Math.round(g.special)}%`));
+    b.appendChild(el('div', 'note', '<b>Magic</b>'));
+    for (const sp of SPELLS) {
+      const can = g.canCast(sp.id);
+      const auto = g.data.autocast === sp.id;
+      const r = el('div', 'row', `<div class="tx"><b>${sp.name}</b><small>Lvl ${sp.level} · ${sp.blurb}${auto ? ' · Autocast' : ''}</small></div><button class="btn sm" ${can ? '' : 'disabled'}>Cast</button><button class="btn sm${auto ? ' gold' : ''}" ${can ? '' : 'disabled'}>Auto</button>`);
+      const btns = r.querySelectorAll('button');
+      btns[0].onclick = () => g.castSpell(sp.id, g.targetEnt);
+      btns[1].onclick = () => g.setAutocast(auto ? null : sp.id);
+      b.appendChild(r);
+    }
+    b.appendChild(el('div', 'note', '<b>Fletching</b>'));
+    const fs = el('button', 'btn sm', 'Cut arrow shafts'); fs.onclick = () => g.fletchShafts(); b.appendChild(fs);
+    const fh = el('button', 'btn sm', 'Make headless arrows'); fh.onclick = () => g.makeHeadless(); b.appendChild(fh);
+    const ft1 = el('button', 'btn sm', 'Tip bronze arrows'); ft1.onclick = () => g.tipArrows('bronze_arrowtips', 'bronze_arrows'); b.appendChild(ft1);
+    const ft2 = el('button', 'btn sm', 'Tip iron arrows'); ft2.onclick = () => g.tipArrows('iron_arrowtips', 'iron_arrows'); b.appendChild(ft2);
+    const ft3 = el('button', 'btn sm', 'Tip steel arrows'); ft3.onclick = () => g.tipArrows('steel_arrowtips', 'steel_arrows'); b.appendChild(ft3);
+    const fb1 = el('button', 'btn sm', 'Fletch shortbow'); fb1.onclick = () => g.fletchBow('logs', 'shortbow', 1, 5); b.appendChild(fb1);
+    const fb2 = el('button', 'btn sm', 'Fletch oak shortbow'); fb2.onclick = () => g.fletchBow('oak_logs', 'oak_shortbow', 20, 16.5); b.appendChild(fb2);
+    const fb3 = el('button', 'btn sm', 'Fletch longbow'); fb3.onclick = () => g.fletchBow('logs', 'longbow', 10, 10); b.appendChild(fb3);
+    const fst = el('button', 'btn sm', 'Fletch staff'); fst.onclick = () => g.fletchStaff(); b.appendChild(fst);
+    b.appendChild(el('div', 'note', '<b>Crafting</b>'));
+    const cl1 = el('button', 'btn sm', 'Leather body'); cl1.onclick = () => g.craftLeatherArmor('leather_body'); b.appendChild(cl1);
+    const cl2 = el('button', 'btn sm', 'Hardleather body'); cl2.onclick = () => g.craftLeatherArmor('hardleather_body'); b.appendChild(cl2);
+    b.appendChild(el('div', 'note', '<b>Runecrafting</b>'));
+    for (const id of ['air_rune', 'mind_rune', 'water_rune', 'earth_rune', 'fire_rune', 'chaos_rune']) {
+      const btn = el('button', 'btn sm', `Craft ${ITEMS[id].name}`); btn.onclick = () => g.craftRune(id); b.appendChild(btn);
+    }
+    b.appendChild(el('div', 'note', '<b>Crafting</b>'));
+    const cl = el('button', 'btn sm', 'Craft leather'); cl.onclick = () => g.craftLeather(); b.appendChild(cl);
+    b.appendChild(el('div', 'note', '<b>Achievements</b>'));
+    for (const a of ACHIEVEMENTS) {
+      const done = g.data.achievements[a.id];
+      b.appendChild(el('div', 'row', `<div class="tx"><b>${a.name}</b><small>${a.desc}${done ? ' · Done' : ''}</small></div>`));
     }
   }
   r_bag(b) {
@@ -235,10 +285,11 @@ export class UI {
     else extra = `Worth ${g.sellValue(id)} coins`;
     const canBury = !!BONE_XP[id];
     const isGem = id === 'enchant_gem';
+    const isClue = id === 'clue_scroll';
     const gem = isGem && idx >= 0 ? g.data.bag[idx]?.gem : null;
     const ench = e ? `<div class="enchBox" style="border-color:${rc.color}"><b style="color:${rc.color}">${rc.name} enchant</b>${e.mods.map((m) => `<div>${modText(m)}</div>`).join('')}</div>` : '';
     const gemInfo = gem ? `<div class="enchBox" style="border-color:${RARITIES[gem.r].color}"><b style="color:${RARITIES[gem.r].color}">${gemText(gem)}</b></div>` : '';
-    const c = this.modal(`<h3${rc ? ` style="color:${rc.color}"` : ''}>${img(id)} ${esc(it.name)}</h3><p class="note">${extra}</p>${ench}${gemInfo}<div class="btns">${it.slot ? '<button class="btn gold" id="mEq" style="flex:1">Equip</button>' : ''}${it.heal ? '<button class="btn gold" id="mEat" style="flex:1">Eat</button>' : ''}${canBury ? '<button class="btn gold" id="mBury" style="flex:1">Bury</button>' : ''}${e ? '<button class="btn" id="mExtract" style="flex:1">Extract gem</button>' : ''}${isGem && gem ? '<button class="btn gold" id="mApply" style="flex:1">Apply</button><button class="btn" id="mCombine" style="flex:1">Combine</button>' : ''}${isEnchantable(id) ? '<button class="btn" id="mEn" style="flex:1">Enchant</button>' : ''}<button class="btn" id="mX" style="flex:1">Close</button></div>`);
+    const c = this.modal(`<h3${rc ? ` style="color:${rc.color}"` : ''}>${img(id)} ${esc(it.name)}</h3><p class="note">${extra}</p>${ench}${gemInfo}<div class="btns">${it.slot ? '<button class="btn gold" id="mEq" style="flex:1">Equip</button>' : ''}${it.heal ? '<button class="btn gold" id="mEat" style="flex:1">Eat</button>' : ''}${canBury ? '<button class="btn gold" id="mBury" style="flex:1">Bury</button>' : ''}${isClue ? '<button class="btn gold" id="mClue" style="flex:1">Open</button>' : ''}${e ? '<button class="btn" id="mExtract" style="flex:1">Extract gem</button>' : ''}${isGem && gem ? '<button class="btn gold" id="mApply" style="flex:1">Apply</button><button class="btn" id="mCombine" style="flex:1">Combine</button>' : ''}${isEnchantable(id) ? '<button class="btn" id="mEn" style="flex:1">Enchant</button>' : ''}<button class="btn" id="mX" style="flex:1">Close</button></div>`);
     c.querySelector('#mX').onclick = () => this.closeModal();
     const eat = c.querySelector('#mEat');
     if (eat) eat.onclick = () => { g.eat(id); this.closeModal(); };
@@ -250,7 +301,8 @@ export class UI {
     if (eq) { eq.disabled = !g.canEquip(id).ok; eq.onclick = () => { g.equip(id, idx); this.closeModal(); }; }
     const extract = c.querySelector('#mExtract');
     if (extract) extract.onclick = () => this.extractPrompt(idx);
-    const apply = c.querySelector('#mApply');
+    const clue = c.querySelector('#mClue');
+    if (clue) clue.onclick = () => { g.openClue(); this.closeModal(); };
     if (apply) apply.onclick = () => this.applyGemPrompt(idx);
     const combine = c.querySelector('#mCombine');
     if (combine) combine.onclick = () => this.combineGemPrompt(idx);
@@ -392,7 +444,7 @@ export class UI {
       const a = AREAS[id], un = g.areaUnlocked(id), here = g.data.area === id;
       const mons = [...new Set(a.entities.filter((e) => e[0] === 'monster').map((e) => MONSTERS[e[1]].name))].join(', ');
       const nodes = [...new Set(a.entities.filter((e) => e[0] === 'node').map((e) => NODES[e[1]].name))].join(', ');
-      const r = el('div', 'row' + (un ? '' : ' off'), `<div class="tx"><b>${a.name} ${here ? '<small>(you are here)</small>' : ''}</b><small>Monsters: ${mons}</small><small>Resources: ${nodes}</small>${un ? '' : `<small class="no">Needs combat level ${a.req.combat}</small>`}</div><button class="btn gold" data-area="${id}" ${!un || here ? 'disabled' : ''}>Travel</button>`);
+      const r = el('div', 'row' + (un ? '' : ' off'), `<div class="tx"><b>${a.name} ${here ? '<small>(you are here)</small>' : ''}</b><small>Monsters: ${mons}</small><small>Resources: ${nodes}</small></div><button class="btn gold" data-area="${id}" ${!un || here ? 'disabled' : ''}>Travel</button>`);
       r.querySelector('button').onclick = () => { g.travel(id); };
       b.appendChild(r);
     }

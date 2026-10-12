@@ -59,7 +59,11 @@ export function drawGlyph(ctx, art, c = '#aab3bf', d = '#5f6875') {
     case 'ore': poly(ctx, [[-14, 10], [-16, -2], [-6, -14], [8, -12], [16, -2], [12, 10]], '#7b7b86'); circle(ctx, -5, -2, 4, c, null); circle(ctx, 6, 0, 3.5, c, null); circle(ctx, 0, 6, 3, c, null); break;
     case 'bar': poly(ctx, [[-16, 8], [-10, -6], [14, -6], [18, 8]], c, OUT); poly(ctx, [[-10, -6], [14, -6], [12, -10], [-6, -10]], shade(c, 1.25), OUT); break;
     case 'log': rrect(ctx, -17, -7, 34, 15, 6, c); ellipse(ctx, 17, 0.5, 4, 7.5, shade(c, 1.35)); ctx.strokeStyle = shade(c, 0.7); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-10, -2); ctx.lineTo(8, -2); ctx.moveTo(-12, 3); ctx.lineTo(6, 3); ctx.stroke(); break;
-    case 'bones': ctx.save(); ctx.rotate(-0.6); rrect(ctx, -16, -3, 32, 6, 3, c); circle(ctx, -17, -3, 4, c); circle(ctx, -17, 3, 4, c); circle(ctx, 17, -3, 4, c); circle(ctx, 17, 3, 4, c); ctx.restore(); break;
+    case 'bones': ctx.save(); ctx.rotate(-0.55); rrect(ctx, -18, -3, 36, 6, 3, c, OUT, 1.5); circle(ctx, -19, -3, 4.5, c, OUT, 1.2); circle(ctx, -19, 3, 4.5, c, OUT, 1.2); circle(ctx, 19, -3, 4.5, c, OUT, 1.2); circle(ctx, 19, 3, 4.5, c, OUT, 1.2); ctx.restore(); break;
+    case 'bow': rrect(ctx, -2, -20, 4, 40, 2, '#8a5a30'); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 14, -1.2, 1.2); ctx.stroke(); break;
+    case 'arrow': rrect(ctx, -1, -16, 2, 32, 1, '#8a5a30'); poly(ctx, [[0, -20], [-3, -14], [3, -14]], c); break;
+    case 'rune': circle(ctx, 0, 0, 10, c, OUT, 1.5); circle(ctx, 0, 0, 4, shade(c, 1.3), null); break;
+    case 'scroll': rrect(ctx, -10, -14, 20, 28, 2, c, OUT, 1.5); ctx.strokeStyle = shade(c, 0.7); ctx.lineWidth = 1; for (let i = -8; i <= 8; i += 4) { ctx.beginPath(); ctx.moveTo(-6, i); ctx.lineTo(6, i); ctx.stroke(); } break;
     case 'gem': {
       const shade = (h) => { const n = parseInt(h.slice(1), 16); const f = (v) => Math.round(v * 0.7).toString(16).padStart(2, '0'); return `#${f(n >> 16)}${f((n >> 8) & 255)}${f(n & 255)}`; };
       poly(ctx, [[0, -16], [12, -4], [8, 14], [-8, 14], [-12, -4]], c); poly(ctx, [[0, -16], [12, -4], [0, 2]], shade(c), null); break;
