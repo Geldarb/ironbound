@@ -155,6 +155,7 @@ export const TIER_BAR = ['bronze_bar', 'iron_bar', 'steel_bar', 'mithril_bar', '
 export const ITEMS = {};
 const add = (id, o) => { ITEMS[id] = { id, ...o }; };
 // materials
+add('enchant_gem', { name: 'Enchantment gem', stack: false, value: 1, art: 'gem', c: '#d9a6ff' });
 add('clue_scroll', { name: 'Clue scroll', stack: false, value: 1, art: 'scroll', c: '#f5e6c8' });
 add('copper_ore', { name: 'Copper ore', stack: true, value: 4, art: 'ore', c: '#c9773a' });
 add('tin_ore', { name: 'Tin ore', stack: true, value: 4, art: 'ore', c: '#b9c2cf' });
