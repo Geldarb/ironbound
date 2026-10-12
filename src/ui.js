@@ -183,15 +183,8 @@ export class UI {
   r_skills(b) {
     const g = this.g;
     b.appendChild(el('div', 'row', `<div class="tx"><b>Combat level ${g.combatLevel}</b><small>Attack, Strength, Defence, Hitpoints</small></div>`));
-    b.appendChild(el('div', 'row', `<div class="tx"><b>Prayer points ${g.prayerPoints}/${g.maxPrayer}</b><small>Bury bones for XP. Activate prayers below.</small></div>`));
-    for (const p of PRAYERS) {
-      const on = g.data.activePrayers.includes(p.id);
-      const can = g.level('prayer') >= p.level;
-      const r = el('div', 'row', `<div class="tx"><b>${p.name}</b><small>Level ${p.level} · ${p.blurb} · drain ${p.drain}/s</small></div><button class="btn sm${on ? ' gold' : ''}" ${can ? '' : 'disabled'}>${on ? 'On' : 'Off'}</button>`);
-      r.querySelector('button').onclick = () => g.togglePrayer(p.id);
-      b.appendChild(r);
-    }
-    for (const s of SKILLS) {
+    const core = ['attack', 'strength', 'defence', 'hitpoints', 'mining', 'smithing', 'fishing', 'cooking', 'woodcutting'];
+    for (const s of SKILLS.filter((x) => core.includes(x.id))) {
       const xp = g.data.xp[s.id], lv = g.level(s.id);
       const r = el('div', 'row', `<div class="tx"><b>${s.name} <span style="float:right;color:var(--gold)">${lv}</span></b><small>${lv >= 99 ? 'Max level' : `${fmt(xp)} xp · ${fmt(xpForLevel(lv + 1) - xp)} to next`}</small><div class="xpbar"><i style="width:${Math.round(levelProgress(xp) * 100)}%;background:${s.color}"></i></div></div>`);
       r.dataset.skill = s.id; b.appendChild(r);
@@ -205,35 +198,6 @@ export class UI {
       const btn = el('button', 'btn gold', 'Get task'); btn.onclick = () => g.requestSlayerTask(); b.appendChild(btn);
     }
     b.appendChild(el('div', 'note', `<b>Energy</b> ${Math.round(g.energy)}% · <b>Special</b> ${Math.round(g.special)}%`));
-    b.appendChild(el('div', 'note', '<b>Magic</b>'));
-    for (const sp of SPELLS) {
-      const can = g.canCast(sp.id);
-      const auto = g.data.autocast === sp.id;
-      const r = el('div', 'row', `<div class="tx"><b>${sp.name}</b><small>Lvl ${sp.level} · ${sp.blurb}${auto ? ' · Autocast' : ''}</small></div><button class="btn sm" ${can ? '' : 'disabled'}>Cast</button><button class="btn sm${auto ? ' gold' : ''}" ${can ? '' : 'disabled'}>Auto</button>`);
-      const btns = r.querySelectorAll('button');
-      btns[0].onclick = () => g.castSpell(sp.id, g.targetEnt);
-      btns[1].onclick = () => g.setAutocast(auto ? null : sp.id);
-      b.appendChild(r);
-    }
-    b.appendChild(el('div', 'note', '<b>Fletching</b>'));
-    const fs = el('button', 'btn sm', 'Cut arrow shafts'); fs.onclick = () => g.fletchShafts(); b.appendChild(fs);
-    const fh = el('button', 'btn sm', 'Make headless arrows'); fh.onclick = () => g.makeHeadless(); b.appendChild(fh);
-    const ft1 = el('button', 'btn sm', 'Tip bronze arrows'); ft1.onclick = () => g.tipArrows('bronze_arrowtips', 'bronze_arrows'); b.appendChild(ft1);
-    const ft2 = el('button', 'btn sm', 'Tip iron arrows'); ft2.onclick = () => g.tipArrows('iron_arrowtips', 'iron_arrows'); b.appendChild(ft2);
-    const ft3 = el('button', 'btn sm', 'Tip steel arrows'); ft3.onclick = () => g.tipArrows('steel_arrowtips', 'steel_arrows'); b.appendChild(ft3);
-    const fb1 = el('button', 'btn sm', 'Fletch shortbow'); fb1.onclick = () => g.fletchBow('logs', 'shortbow', 1, 5); b.appendChild(fb1);
-    const fb2 = el('button', 'btn sm', 'Fletch oak shortbow'); fb2.onclick = () => g.fletchBow('oak_logs', 'oak_shortbow', 20, 16.5); b.appendChild(fb2);
-    const fb3 = el('button', 'btn sm', 'Fletch longbow'); fb3.onclick = () => g.fletchBow('logs', 'longbow', 10, 10); b.appendChild(fb3);
-    const fst = el('button', 'btn sm', 'Fletch staff'); fst.onclick = () => g.fletchStaff(); b.appendChild(fst);
-    b.appendChild(el('div', 'note', '<b>Crafting</b>'));
-    const cl1 = el('button', 'btn sm', 'Leather body'); cl1.onclick = () => g.craftLeatherArmor('leather_body'); b.appendChild(cl1);
-    const cl2 = el('button', 'btn sm', 'Hardleather body'); cl2.onclick = () => g.craftLeatherArmor('hardleather_body'); b.appendChild(cl2);
-    b.appendChild(el('div', 'note', '<b>Runecrafting</b>'));
-    for (const id of ['air_rune', 'mind_rune', 'water_rune', 'earth_rune', 'fire_rune', 'chaos_rune']) {
-      const btn = el('button', 'btn sm', `Craft ${ITEMS[id].name}`); btn.onclick = () => g.craftRune(id); b.appendChild(btn);
-    }
-    b.appendChild(el('div', 'note', '<b>Crafting</b>'));
-    const cl = el('button', 'btn sm', 'Craft leather'); cl.onclick = () => g.craftLeather(); b.appendChild(cl);
     b.appendChild(el('div', 'note', '<b>Achievements</b>'));
     for (const a of ACHIEVEMENTS) {
       const done = g.data.achievements[a.id];
