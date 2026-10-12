@@ -155,7 +155,7 @@ export const TIER_BAR = ['bronze_bar', 'iron_bar', 'steel_bar', 'mithril_bar', '
 export const ITEMS = {};
 const add = (id, o) => { ITEMS[id] = { id, ...o }; };
 // materials
-add('coins', { name: 'Coins', stack: true, value: 1, art: 'coins' });
+add('enchant_gem', { name: 'Enchantment gem', stack: false, value: 1, art: 'gem', c: '#d9a6ff' });
 add('copper_ore', { name: 'Copper ore', stack: true, value: 4, art: 'ore', c: '#c9773a' });
 add('tin_ore', { name: 'Tin ore', stack: true, value: 4, art: 'ore', c: '#b9c2cf' });
 add('iron_ore', { name: 'Iron ore', stack: true, value: 12, art: 'ore', c: '#8f5a4a' });
@@ -273,6 +273,19 @@ for (const [i] of TIERS.entries()) {
 }
 /** Cooking: station 'cook' = campfire or range. Burn chance starts at 50% (fire) / 30% (range) at the required level and falls to 0 at `stop`. */
 for (const c of COOKABLE) RECIPES.push({ id: `cook_${c.out}`, station: 'cook', skill: 'cooking', out: c.out, inputs: { [c.raw]: 1 }, level: c.level, stop: c.stop, xp: c.xp, chance: 1, burnt: 'burnt_food' });
+// Fletching
+RECIPES.push({ id: 'arrow_shaft', station: 'fletch', skill: 'fletching', out: 'arrow_shaft', inputs: { logs: 1 }, level: 1, xp: 5, chance: 1, n: 15 });
+RECIPES.push({ id: 'shortbow', station: 'fletch', skill: 'fletching', out: 'shortbow', inputs: { logs: 1 }, level: 5, xp: 5, chance: 1 });
+RECIPES.push({ id: 'oak_shortbow', station: 'fletch', skill: 'fletching', out: 'oak_shortbow', inputs: { oak_logs: 1 }, level: 20, xp: 16.5, chance: 1 });
+RECIPES.push({ id: 'willow_shortbow', station: 'fletch', skill: 'fletching', out: 'willow_shortbow', inputs: { willow_logs: 1 }, level: 35, xp: 33.3, chance: 1 });
+RECIPES.push({ id: 'longbow', station: 'fletch', skill: 'fletching', out: 'longbow', inputs: { logs: 1 }, level: 10, xp: 10, chance: 1 });
+RECIPES.push({ id: 'bronze_arrows', station: 'fletch', skill: 'fletching', out: 'bronze_arrows', inputs: { headless_arrow: 15, bronze_arrowtips: 15 }, level: 1, xp: 39.5, chance: 1 });
+RECIPES.push({ id: 'iron_arrows', station: 'fletch', skill: 'fletching', out: 'iron_arrows', inputs: { headless_arrow: 15, iron_arrowtips: 15 }, level: 15, xp: 57.5, chance: 1 });
+RECIPES.push({ id: 'staff', station: 'fletch', skill: 'fletching', out: 'staff', inputs: { logs: 1 }, level: 1, xp: 12.5, chance: 1 });
+// Crafting
+RECIPES.push({ id: 'leather_body', station: 'craft', skill: 'crafting', out: 'leather_body', inputs: { soft_leather: 1 }, level: 14, xp: 25, chance: 1 });
+RECIPES.push({ id: 'hardleather_body', station: 'craft', skill: 'crafting', out: 'hardleather_body', inputs: { hard_leather: 1 }, level: 28, xp: 35, chance: 1 });
+RECIPES.push({ id: 'studded_body', station: 'craft', skill: 'crafting', out: 'studded_body', inputs: { hard_leather: 1, steel_studs: 1 }, level: 41, xp: 40, chance: 1 });
 export const burnChance = (r, cookLevel, onRange) => (cookLevel >= r.stop ? 0 : (onRange ? 0.3 : 0.5) * ((r.stop - cookLevel) / Math.max(1, r.stop - r.level)));
 export const RECIPE_BY_ID = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
 export const STATIONS = {

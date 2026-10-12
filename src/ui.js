@@ -7,8 +7,8 @@ import { iconURL, tabIcon } from './art.js';
 import { $, el, esc, fmt, setText } from './dom.js';
 
 const NAV = [
-  { id: 'gear', i: '🛡', t: 'Gear' }, { id: 'skills', i: '📊', t: 'Skills' }, { id: 'bag', i: '🎒', t: 'Bag' },
-  { id: 'craft', i: '🔨', t: 'Craft' }, { id: 'map', i: '🗺', t: 'Map' },
+  { id: 'gear', i: '🛡', t: 'Gear' }, { id: 'skills', i: '📊', t: 'Skills' }, { id: 'prayer', i: '🙏', t: 'Prayer' },
+  { id: 'magic', i: '✨', t: 'Magic' }, { id: 'bag', i: '🎒', t: 'Bag' }, { id: 'craft', i: '🔨', t: 'Craft' }, { id: 'map', i: '🗺', t: 'Map' },
 ];
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 const img = (id) => `<img alt="" src="${iconURL(id)}">`;
@@ -125,7 +125,7 @@ export class UI {
 
   renderSheet(keepScroll = false) {
     const body = $('sheetBody'), top = body.scrollTop, g = this.g;
-    const t = { gear: 'Equipment', skills: 'Skills', bag: this.mode.bank ? 'Bank' : this.mode.shop ? 'General store' : 'Bag', craft: 'Crafting', map: 'World map', settings: 'Settings', altar: 'Enchanting altar', prayer: 'Prayer altar' }[this.sheet];
+    const t = { gear: 'Equipment', skills: 'Skills', prayer: 'Prayer', magic: 'Magic', bag: this.mode.bank ? 'Bank' : this.mode.shop ? 'General store' : 'Bag', craft: 'Crafting', map: 'World map', settings: 'Settings', altar: 'Enchanting altar' }[this.sheet];
     $('sheetTitle').textContent = t;
     body.innerHTML = '';
     this['r_' + this.sheet](body);
@@ -159,24 +159,24 @@ export class UI {
   }
   r_prayer(b) {
     const g = this.g;
-    b.appendChild(el('div', 'row', `<div class="tx"><b>Prayer altar</b><small>Offer bones here for double Prayer XP and a chance of Enchant Points.</small></div>`));
-    b.appendChild(el('div', 'note', `Prayer points ${g.prayerPoints}/${g.maxPrayer} · ✨ ${g.ep} EP`));
-    const restoreBtn = el('button', 'btn gold', 'Restore prayer points');
-    restoreBtn.style.margin = '6px 0';
-    restoreBtn.disabled = g.prayerPoints >= g.maxPrayer;
-    restoreBtn.onclick = () => { g.restorePrayer(); this.renderSheet(); };
-    b.appendChild(restoreBtn);
-    const boneIds = Object.keys(BONES).filter((id) => g.count(id) > 0);
-    if (!boneIds.length) {
-      b.appendChild(el('p', 'note', 'No bones in your bag. Kill monsters to collect them.'));
-      return;
+    b.appendChild(el('div', 'row', `<div class="tx"><b>Prayer points ${g.prayerPoints}/${g.maxPrayer}</b><small>Bury bones for XP. Activate prayers below.</small></div>`));
+    for (const p of PRAYERS) {
+      const on = g.data.activePrayers.includes(p.id);
+      const can = g.level('prayer') >= p.level;
+      const r = el('div', 'row', `<div class="tx"><b>${p.name}</b><small>Level ${p.level} · ${p.blurb} · drain ${p.drain}/s</small></div><button class="btn sm${on ? ' gold' : ''}" ${can ? '' : 'disabled'}>${on ? 'On' : 'Off'}</button>`);
+      r.querySelector('button').onclick = () => g.togglePrayer(p.id);
+      b.appendChild(r);
     }
-    for (const id of boneIds) {
-      const bdef = BONES[id], n = g.count(id);
-      const r = el('div', 'row', `${img(id)}<div class="tx"><b>${esc(bdef.name)} x${n}</b><small>Altar: +${bdef.altarXp} Prayer · ${Math.round(bdef.epChance * 100)}% EP chance${bdef.epFlat ? ` +${bdef.epFlat} EP` : ''}</small></div><div class="btns"><button class="btn sm" data-n="1">1</button>${n >= 5 ? '<button class="btn sm" data-n="5">5</button>' : ''}${n > 1 ? `<button class="btn sm gold" data-n="${n}">All</button>` : ''}</div>`);
-      r.querySelectorAll('[data-n]').forEach((x) => {
-        x.onclick = () => { g.buryAtAltar(id, Number(x.dataset.n)); this.renderSheet(); };
-      });
+    b.appendChild(el('div', 'note', 'Offer bones at the Prayer altar for bonus XP and Enchant Points.'));
+  }
+  r_magic(b) {
+    const g = this.g;
+    b.appendChild(el('div', 'row', `<div class="tx"><b>Magic level ${g.level('magic')}</b><small>Cast spells in combat or use them from here.</small></div>`));
+    for (const s of SPELLS) {
+      const can = g.level('magic') >= s.level;
+      const hasRunes = Object.entries(s.runes || {}).every(([id, n]) => g.count(id) >= n);
+      const r = el('div', 'row' + (can && hasRunes ? '' : ' off'), `<div class="tx"><b>${s.name}</b><small>Level ${s.level} · ${s.blurb}</small></div><button class="btn sm" ${can && hasRunes ? '' : 'disabled'}>Cast</button>`);
+      r.querySelector('button').onclick = () => g.castSpell(s.id);
       b.appendChild(r);
     }
   }
@@ -366,11 +366,11 @@ export class UI {
   }
   r_craft(b) {
     const g = this.g, menu = this.craftMenu;
-    const MENUS = { furnace: 'Smelting', anvil: 'Smithing', cook: 'Cooking' };
+    const MENUS = { furnace: 'Smelting', anvil: 'Smithing', cook: 'Cooking', fletch: 'Fletching', craft: 'Crafting' };
     const seg = el('div', 'seg', Object.entries(MENUS).map(([k, nm]) => `<button data-menu="${k}" class="${k === menu ? 'on' : ''}">${nm}</button>`).join(''));
     seg.querySelectorAll('button').forEach((x) => { x.onclick = () => { this.craftMenu = x.dataset.menu; this.renderSheet(); $('sheetBody').scrollTop = 0; }; });
     b.appendChild(seg);
-    const sk = menu === 'cook' ? 'cooking' : 'smithing';
+    const sk = menu === 'cook' ? 'cooking' : menu === 'fletch' ? 'fletching' : menu === 'craft' ? 'crafting' : 'smithing';
     if (!g.stationVisited(menu)) b.appendChild(el('div', 'warn', menu === 'cook' ? 'Walk up to a campfire or range (tap it) to unlock cooking. Starter Meadow has both.' : `Walk to the ${STATIONS[menu].name} in Starter Meadow (tap it) to unlock this menu.`));
     else b.appendChild(el('p', 'note', (menu === 'cook' ? `${g.data.visited.range ? 'Using a range (fewer burnt)' : 'Using a campfire (find a range to burn less)'}. ` : STATIONS[menu].blurb + ' ') + `${cap(sk)} level ${g.level(sk)}.`));
     if (menu === 'anvil') {
