@@ -129,7 +129,7 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   g.data.hp = 2; g.select(wolf.id);
   for (let i = 0; i < 400; i++) g.update(0.05);
   check(g.target === null || g.data.hp === g.maxHp, 'low HP retreats or dies back to start');
-  check(Object.keys(AREAS).length === 10 && Object.values(NODES).every((x) => nodeYields(x).every((y) => ITEMS[y.item])), 'area/node tables sane');
+  check(Object.keys(AREAS).length === 12 && Object.values(NODES).every((x) => nodeYields(x).every((y) => ITEMS[y.item])), 'area/node tables sane');
 }
 
 // --- saves
@@ -603,6 +603,26 @@ function stanceXpOf(g) { return g.combat.style.xp.map((k) => [k]); }
   w.addItem('law_rune', 2); check(w.castSpell('varrock_tele') && w.data.area === 'varrock', 'Varrock Teleport travels');
   check(SHOP_BUY_OK(), 'shop sells bows, arrows, flax, bow string, staves, runes');
   function SHOP_BUY_OK() { return ['longbow', 'bronze_arrows', 'flax', 'bow_string', 'fire_staff', 'law_rune'].every((id) => D.SHOP_BUY.includes(id)); }
+}
+
+// ---- Camelot / Ardougne + their teleports ----
+{
+  const D = await import('../src/data.js'); const { MONSTER_ART, MON_HEIGHT } = await import('../src/monsters.js');
+  for (const id of ['camelot', 'ardougne']) {
+    const ar = AREAS[id], sx = ar.entities.map((e) => e[2]);
+    check(ar && ar.entities.every((e) => e[2] > 0 && e[2] < ar.width) && new Set(sx).size === sx.length, `${id}: entities inside the map, no overlaps`);
+    check(ar.entities.some((e) => e[0] === 'station' && e[1] === 'bank') && ar.entities.some((e) => e[0] === 'station' && e[1] === 'store'), `${id}: bank + store`);
+    check(ar.entities.filter((e) => e[0] === 'sign').every((e) => AREAS[e[1]]) && Object.entries(AREAS).some(([k, o]) => k !== id && o.entities.some((e) => e[0] === 'sign' && e[1] === id)), `${id}: signposted both ways`);
+  }
+  check(['yew', 'magic_tree', 'maple', 'flax'].every((k) => AREAS.camelot.entities.some((e) => e[1] === k)), "Camelot/Seers: flax, maples, yews, magic trees");
+  check(['paladin', 'knight_of_ardougne', 'hero', 'thief', 'guard'].every((k) => AREAS.ardougne.entities.some((e) => e[1] === k)), 'Ardougne: paladins, knights, hero, thieves, guards');
+  for (const k of ['paladin', 'knight_of_ardougne', 'hero', 'unicorn']) check(MONSTERS[k] && MONSTER_ART[k] && MON_HEIGHT[k] && MONSTERS[k].drops.every((d) => ITEMS[d.id]), `${k}: stats, art, drops`);
+  const cam = D.SPELL_BY_ID.camelot_tele, ard = D.SPELL_BY_ID.ardougne_tele;
+  check(cam.level === 45 && JSON.stringify(cam.runes) === JSON.stringify({ air_rune: 5, law_rune: 1 }) && ard.level === 51 && JSON.stringify(ard.runes) === JSON.stringify({ water_rune: 2, law_rune: 2 }), 'Camelot (45: 5 air + 1 law) / Ardougne (51: 2 water + 2 law) Teleport per OSRS');
+  const g = mk(61); g.data.xp.magic = xpForLevel(51); g.addItem('air_rune', 5); g.addItem('water_rune', 2); g.addItem('law_rune', 3);
+  check(g.castSpell('camelot_tele') && g.data.area === 'camelot' && g.count('law_rune') === 2 && g.count('air_rune') === 0, 'Camelot Teleport');
+  check(g.castSpell('ardougne_tele') && g.data.area === 'ardougne' && g.count('law_rune') === 0, 'Ardougne Teleport');
+  g.travel('varrock'); const sg = g.ents.find((e) => e.type === 'sign' && e.kind === 'camelot'); check(!!sg, 'Varrock has a sign to Camelot');
 }
 
 console.log(failed ? `\n${failed} of ${n} FAILED` : `\nall ${n} unit checks passed`);

@@ -221,4 +221,16 @@ M.steel_dragon = dragon('#9aa8b6', '#d8e0e8', '#aab6c2', '#3a4048', 1.2);
 
 export const MONSTER_ART = M;
 /** approximate on-screen height (for HP bars, splats, tap targets) */
-export const MON_HEIGHT = { goblin: 62, goblin_archer: 62, hill_giant: 112, moss_giant: 118, fire_giant: 126, skeleton: 70, zombie: 66, imp: 48, wizard: 82, dark_wizard: 78, al_kharid_warrior: 70, white_knight: 76, guard: 72, thief: 70, pirate: 70, greater_demon: 118, black_demon: 132, wolf: 54, alpha_wolf: 76, giant_rat: 34, scorpion: 48, bat: 60, seagull: 40, chaos_elemental: 100, green_dragon: 112, bronze_dragon: 122, iron_dragon: 128, steel_dragon: 134, chicken: 46, cow: 52 };
+// Camelot / Ardougne
+M.paladin = (ctx, a) => humanoid(ctx, a, { skin: '#f0c8a0', top: '#e8ecf0', legC: '#d8dce4', plate: true, boots: '#b8bcc8', sleeve: '#d8dce4', trim: '#d6b24a', hat: 'fullhelm', hatC: '#f0f0f4', plume: '#d6b24a', weapon: 'longsword', wColor: '#f3e7b0', shield: '#f0d878' });
+M.knight_of_ardougne = (ctx, a) => humanoid(ctx, a, { skin: '#f0c8a0', top: '#aab3bf', legC: '#9aa3ad', plate: true, boots: '#7a828c', sleeve: '#9aa3ad', hat: 'medhelm', hatC: '#aab3bf', weapon: 'longsword', wColor: '#c9d6e3', shield: '#3b5fd8' });
+M.hero = (ctx, a) => humanoid(ctx, a, { skin: '#e8b890', top: '#8a1a2a', chain: true, pants: '#3a2a22', belt: '#d6b24a', hair: '#3a2a1a', beard: '#3a2a1a', weapon: 'longsword', wColor: '#e8ecf0', shield: '#8a1a2a' });
+const unicornHead = (ctx, x, y, ph) => {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(-0.35 + ph * 0.5);
+  rrect(ctx, -8, -14, 12, 20, 5, '#f4f4fa'); rrect(ctx, -2, -12, 20, 11, 5, '#f4f4fa'); rrect(ctx, 13, -9, 6, 7, 3, '#e8d8e8', null);
+  poly(ctx, [[4, -14], [10, -34], [9, -13]], '#f3d77a', OUT, 1.2); for (let i = 0; i < 3; i++) rrect(ctx, 4.5 + i * 1.2, -18 - i * 5, 4, 1.2, 0.5, '#c9a43a', null);
+  rrect(ctx, -11, -14, 6, 22, 3, '#d8c8f0', null); circle(ctx, 6, -8, 1.8, '#2a2030', null); poly(ctx, [[-4, -16], [-1, -22], [1, -15]], '#f4f4fa', OUT, 1);
+  ctx.restore();
+};
+M.unicorn = (ctx, a) => quadruped(ctx, a, { fur: '#f4f4fa', belly: '#e4e4ee', len: 50, legH: 20, hoof: '#c9a43a', tail: { ang: -0.6, len: 22, w: 7, c: '#d8c8f0' }, head: unicornHead });
+export const MON_HEIGHT = { paladin: 78, knight_of_ardougne: 74, hero: 72, unicorn: 70, goblin: 62, goblin_archer: 62, hill_giant: 112, moss_giant: 118, fire_giant: 126, skeleton: 70, zombie: 66, imp: 48, wizard: 82, dark_wizard: 78, al_kharid_warrior: 70, white_knight: 76, guard: 72, thief: 70, pirate: 70, greater_demon: 118, black_demon: 132, wolf: 54, alpha_wolf: 76, giant_rat: 34, scorpion: 48, bat: 60, seagull: 40, chaos_elemental: 100, green_dragon: 112, bronze_dragon: 122, iron_dragon: 128, steel_dragon: 134, chicken: 46, cow: 52 };

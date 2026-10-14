@@ -86,6 +86,37 @@ const iconCache = new Map();
 const BLADES = new Set(['dagger', 'sword', 'longsword', 'scimitar', '2h', 'spear', 'halberd', 'mace', 'warhammer', 'axe', 'battleaxe']);
 const ICON_SCALE = { '2h': 0.5, spear: 0.42, halberd: 0.4, longsword: 0.66, battleaxe: 0.7, warhammer: 0.75, sword: 0.75, scimitar: 0.85, mace: 0.8, axe: 0.85 };
 /** data-URL icon for an item id (cached), 48x48 */
+/** chunkier inventory icons for thin glyphs (bows, arrows, staves, flax); returns false to use the normal glyph */
+function iconGlyph(ctx, it) {
+  const c = it.c || '#b9824a', d = shade(c, 0.6);
+  if (it.art === 'bow') {
+    const unstrung = it.id.endsWith('_u'), long = /longbow/.test(it.id), r = long ? 21 : 17;
+    ctx.rotate(0.65);
+    ctx.lineCap = 'round'; ctx.strokeStyle = OUT; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(-r * 0.45, 0, r, -1.15, 1.15); ctx.stroke();
+    ctx.strokeStyle = c; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(-r * 0.45, 0, r, -1.15, 1.15); ctx.stroke();
+    ctx.strokeStyle = shade(c, 1.25); ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(-r * 0.45, 0, r - 1.2, -1.0, 0.2); ctx.stroke();
+    rrect(ctx, r * 0.55 - 3, -4, 6, 8, 2, '#5a3418', OUT, 1.2);
+    const ex = -r * 0.45 + r * Math.cos(1.15), ey = r * Math.sin(1.15);
+    if (!unstrung) { ctx.strokeStyle = '#f3ead2'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(ex, -ey); ctx.lineTo(ex, ey); ctx.stroke(); }
+    return true;
+  }
+  if (it.art === 'arrow') {
+    ctx.rotate(0.78); const many = it.stack && /arrows|headless/.test(it.id);
+    for (const off of many ? [-5, 0, 5] : [0]) {
+      ctx.save(); ctx.translate(off, off * 0.3);
+      rrect(ctx, -2, -14, 4, 30, 1.5, '#8a5a30', OUT, 1.2);
+      if (!/headless|shaft|tips/.test(it.id)) poly(ctx, [[0, -24], [-5.5, -13], [5.5, -13]], c, OUT, 1.2);
+      if (/tips/.test(it.id)) { ctx.restore(); continue; }
+      if (!/shaft/.test(it.id)) { poly(ctx, [[-2, 9], [-7, 17], [-2, 15]], '#f3ead2', OUT, 1); poly(ctx, [[2, 9], [7, 17], [2, 15]], '#f3ead2', OUT, 1); }
+      ctx.restore();
+    }
+    if (/tips/.test(it.id)) { ctx.rotate(-0.78); for (const [x, y] of [[-8, 4], [0, -6], [8, 4]]) poly(ctx, [[x, y - 9], [x - 6, y + 5], [x + 6, y + 5]], c, OUT, 1.4); }
+    return true;
+  }
+  if (it.art === 'staff') { ctx.rotate(0.6); rrect(ctx, -3.5, -16, 7, 38, 3, '#8a5a30', OUT, 1.4); circle(ctx, 0, -20, 8, c, OUT, 1.6); circle(ctx, -2, -22, 3, shade(c, 1.4), null); return true; }
+  if (it.art === 'herb') { for (const [x, h] of [[-7, 18], [0, 22], [7, 17]]) { rrect(ctx, x - 1.5, -h + 14, 3, h, 1.5, '#5a8a3a', OUT, 1); circle(ctx, x, -h + 12, 5, c, OUT, 1.2); } return true; }
+  return false;
+}
 export function iconURL(id) {
   if (iconCache.has(id)) return iconCache.get(id);
   const it = ITEMS[id];
@@ -94,7 +125,7 @@ export function iconURL(id) {
   const ctx = cv.getContext('2d');
   ctx.translate(24, 24); ctx.scale(ICON_SCALE[it.art] || 0.8, ICON_SCALE[it.art] || 0.8);
   if (BLADES.has(it.art)) { ctx.rotate(0.7); ctx.translate(0, ['2h', 'spear', 'halberd'].includes(it.art) ? -4 : 3); }
-  drawGlyph(ctx, it.art, it.c, it.d || shade(it.c || '#999999', 0.55));
+  if (!iconGlyph(ctx, it)) drawGlyph(ctx, it.art, it.c, it.d || shade(it.c || '#999999', 0.55));
   const url = cv.toDataURL();
   iconCache.set(id, url);
   return url;
@@ -203,6 +234,14 @@ export function drawHero(ctx, x, y, s, o) {
     rrect(ctx, -3.5, -2, 7, 22, 2.5, skinD); rrect(ctx, -3.5, -2, 7, equip.body ? 14 : 9, 2.5, sleeveC);
     if (equip.gloves) { rrect(ctx, -4, 16, 8, 7, 2, shade(ITEMS[equip.gloves].c, 0.8)); } else rrect(ctx, -3, 18, 6, 5, 2, skinD);
   });
+  // ---- shield: strapped to the off-hand forearm, drawn in profile BEHIND the torso so it never covers the chest;
+  // it follows the far arm (walk swing, attack recoil, idle sway)
+  if (equip.shield && !two && ITEMS[equip.shield]) {
+    const px = -9 + lean * 0.3, py = sho + 2, hx = px + 12 * Math.sin(armB), hy = py + 12 * Math.cos(armB);
+    ctx.save(); ctx.translate(hx - 5, hy - 2); ctx.rotate(-armB * 0.5); ctx.scale(0.5, 0.82);
+    drawGlyph(ctx, 'shield', shade(ITEMS[equip.shield].c, 0.92), ITEMS[equip.shield].d); ctx.restore();
+    ctx.save(); ctx.translate(hx - 5 + 6.5, hy - 2); ctx.rotate(-armB * 0.5); rrect(ctx, -1.6, -12, 3.2, 26, 1.5, shade(ITEMS[equip.shield].c, 0.6), OUT, 1); ctx.restore(); // rim edge
+  }
   // ---- torso
   const shirt = equip.body ? tier(equip.body) : L.shirt;
   ctx.save(); ctx.translate(lean * 0.4, 0); ctx.scale(1, 1 + breathe * 0.012);
@@ -211,11 +250,6 @@ export function drawHero(ctx, x, y, s, o) {
   if (equip.body) { const b = ITEMS[equip.body]; poly(ctx, [[-7, sho + 1], [7, sho + 1], [5, sho + 12], [-5, sho + 12]], shade(b.c, 1.18), null); rrect(ctx, -2, sho + 1, 4, 20, 1, shade(b.c, 0.7), null); rrect(ctx, -11, sho - 3, 22, 4, 2, dark(equip.body), null); }
   ctx.restore();
   // ---- shield on the off hand
-  // strapped to the off-hand forearm: follows the far arm's swing (walk, attack, idle) instead of floating on the torso
-  if (equip.shield && !two && ITEMS[equip.shield]) {
-    const px = -9 + lean * 0.3, py = sho + 2, hx = px + 13 * Math.sin(armB), hy = py + 13 * Math.cos(armB);
-    ctx.save(); ctx.translate(hx - 1, hy - 1); ctx.rotate(-armB * 0.35); ctx.scale(0.78, 0.78); drawGlyph(ctx, 'shield', ITEMS[equip.shield].c, ITEMS[equip.shield].d); ctx.restore();
-  }
   // ---- head (blocky)
   const hy = sho - 3 - (lookDown ? 1 : 0);
   ctx.save(); ctx.translate(lean * 0.6 + (pose && pose.name === 'eat' ? 0 : 0), 0);
@@ -419,6 +453,8 @@ export function drawSign(ctx, x, y, s, label, t = 0, left = false) {
 
 // ================= scenery (world-anchored, behind the entities) =================
 export const DECOR = {
+  camelot: [['house', 150, 1], ['lamp', 380], ['fence', 560, 820], ['flower', 900], ['bush', 1150], ['tree', 1450], ['flower', 1600], ['house', 1900, 2], ['bush', 2100], ['lamp', 2450]],
+  ardougne: [['house', 140, 2], ['cart', 560], ['house', 600, 1], ['lamp', 720], ['cart', 980], ['house', 1100, 2], ['lamp', 1400], ['fence', 1700, 1900], ['house', 2050, 1], ['bush', 2400]],
   meadow: [['house', 140, 1], ['fence', 340, 480], ['house', 560, 2], ['bush', 640], ['fence', 860, 1000], ['lamp', 395], ['flower', 760], ['flower', 1130], ['bush', 1330], ['tree', 1380], ['flower', 1560], ['tree', 1800], ['bush', 2050], ['flower', 2100], ['fence', 2060, 2160]],
   quarry: [['rubble', 150], ['cart', 330], ['pine', 520], ['rubble', 900], ['pine', 1250], ['cart', 1600], ['rubble', 1900], ['pine', 2100]],
   peaks: [['pine', 200], ['snow', 400], ['pine', 700], ['rubble', 1000], ['pine', 1300], ['snow', 1500], ['pine', 1750]],

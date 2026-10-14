@@ -64,6 +64,7 @@ export const SLAYER_TASKS = [
   { id: 'hill_giants', name: 'Hill giants', monsters: ['hill_giant'], amount: [5, 15], level: 20, xp: 40 },
   { id: 'bats', name: 'Bats', monsters: ['bat'], amount: [12, 25], level: 5, xp: 12 },
   { id: 'dragons', name: 'Green dragons', monsters: ['green_dragon'], amount: [3, 8], level: 40, xp: 120 },
+  { id: 'paladins', name: 'Paladins', monsters: ['paladin', 'knight_of_ardougne'], amount: [8, 18], level: 40, xp: 70 },
 ];
 export const SLAYER_MASTER = { name: 'Turael', blurb: 'Assigns Slayer tasks. Complete them for bonus XP and coins.' };
 export const SPELLS = []; // filled in the OSRS standard spellbook block below
@@ -355,6 +356,8 @@ SPELLS.push({ id: 'high_alch', name: 'High Level Alchemy', type: 'alch', mult: 0
 SPELLS.push({ id: 'varrock_tele', name: 'Varrock Teleport', type: 'tele', area: 'varrock', level: 25, xp: 35, runes: { fire_rune: 1, air_rune: 3, law_rune: 1 } });
 SPELLS.push({ id: 'lumbridge_tele', name: 'Lumbridge Teleport', type: 'tele', area: 'lumby', level: 31, xp: 41, runes: { earth_rune: 1, air_rune: 3, law_rune: 1 } });
 SPELLS.push({ id: 'falador_tele', name: 'Falador Teleport', type: 'tele', area: 'falador', level: 37, xp: 48, runes: { water_rune: 1, air_rune: 3, law_rune: 1 } });
+SPELLS.push({ id: 'camelot_tele', name: 'Camelot Teleport', type: 'tele', area: 'camelot', level: 45, xp: 55.5, runes: { air_rune: 5, law_rune: 1 } });
+SPELLS.push({ id: 'ardougne_tele', name: 'Ardougne Teleport', type: 'tele', area: 'ardougne', level: 51, xp: 61, runes: { water_rune: 2, law_rune: 2 } });
 for (const sp of SPELLS) SPELL_BY_ID[sp.id] = sp;
 export const UNDEAD = new Set(['skeleton', 'zombie']);
 export const burnChance = (r, cookLevel, onRange) => (cookLevel >= r.stop ? 0 : (onRange ? 0.3 : 0.5) * ((r.stop - cookLevel) / Math.max(1, r.stop - r.level)));
@@ -579,6 +582,30 @@ export const AREAS = {
     ],
   },
 };
+// ---- Kandarin (OSRS style): Camelot & Seers' Village, East Ardougne market
+Object.assign(MONSTERS, {
+  unicorn: { name: 'Unicorn', level: 15, hp: 19, atk: 13, def: 12, maxHit: 2, interval: 2.0, color: '#f4f4fa', family: 'beast', defB: { stab: 4, slash: 4, crush: 4 }, epChance: 0.06,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'unicorn_horn', p: 1, n: [1, 1] }] },
+  paladin: { name: 'Paladin', level: 62, hp: 57, atk: 54, def: 54, maxHit: 6, interval: 2.0, color: '#e8ecf0', family: 'humanoid', defB: { stab: 40, slash: 45, crush: 35 }, epChance: 0.1,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.9, n: [60, 160] }, { id: 'chaos_rune', p: 0.15, n: [5, 12] }, { id: 'mithril_arrows', p: 0.08, n: [5, 15] }, { id: 'adamant_sword', p: 0.02, n: [1, 1] }] },
+  knight_of_ardougne: { name: 'Knight of Ardougne', level: 46, hp: 52, atk: 38, def: 38, maxHit: 5, interval: 2.0, color: '#aab3bf', family: 'humanoid', defB: { stab: 30, slash: 34, crush: 26 }, epChance: 0.08,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.8, n: [30, 90] }, { id: 'steel_arrows', p: 0.12, n: [5, 12] }, { id: 'mithril_sword', p: 0.02, n: [1, 1] }] },
+  hero: { name: 'Hero', level: 69, hp: 82, atk: 60, def: 58, maxHit: 7, interval: 2.0, color: '#8a1a2a', family: 'humanoid', defB: { stab: 45, slash: 48, crush: 40 }, epChance: 0.12,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 1, n: [100, 300] }, { id: 'law_rune', p: 0.15, n: [2, 5] }, { id: 'blood_rune', p: 0.08, n: [2, 4] }, { id: 'adamant_arrows', p: 0.1, n: [5, 12] }] },
+});
+add('unicorn_horn', { name: 'Unicorn horn', stack: true, value: 120, art: 'gem', c: '#f3d77a' });
+Object.assign(AREAS, {
+  camelot: { name: 'Camelot', width: 2600, spawn: 200, req: null, sky: ['#bcd8f0', '#e8f4ff'], hill: ['#6aa05a', '#4a803a'], ground: '#5f9a4a', entities: [
+    ['sign', 'varrock', 80], ['station', 'bank', 300], ['station', 'store', 440], ['node', 'flax', 600], ['node', 'flax', 680], ['node', 'flax', 760],
+    ['monster', 'unicorn', 950], ['monster', 'unicorn', 1060], ['node', 'maple', 1250], ['node', 'maple', 1350], ['monster', 'guard', 1520], ['node', 'yew', 1700], ['node', 'yew', 1800],
+    ['monster', 'paladin', 2000], ['node', 'magic_tree', 2200], ['node', 'magic_tree', 2320], ['sign', 'ardougne', 2520]] },
+  ardougne: { name: 'Ardougne', width: 2600, spawn: 200, req: null, sky: ['#c8cce0', '#ecebf4'], hill: ['#7a8a6a', '#5a6a4a'], ground: '#7a7a6a', entities: [
+    ['sign', 'camelot', 80], ['station', 'bank', 300], ['station', 'store', 450], ['monster', 'thief', 650], ['monster', 'guard', 780], ['monster', 'thief', 900],
+    ['station', 'fire', 1050], ['monster', 'knight_of_ardougne', 1200], ['monster', 'knight_of_ardougne', 1320], ['node', 'oak', 1500], ['node', 'willow', 1620],
+    ['monster', 'paladin', 1820], ['monster', 'paladin', 1940], ['monster', 'hero', 2160], ['node', 'tree', 2320], ['sign', 'port_sarim', 2520]] },
+});
+AREAS.varrock.entities.push(['sign', 'camelot', 2150]);
+AREAS.port_sarim.entities.push(['sign', 'ardougne', 1850]);
 export const AREA_IDS = Object.keys(AREAS);
 export const START_AREA = 'lumby';
 /** monster attack style (melee unless set); protect prayers block the matching style */
