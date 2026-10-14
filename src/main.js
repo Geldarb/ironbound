@@ -7,6 +7,10 @@ import { $ } from './dom.js';
 import { simulateOffline } from './offline.js';
 import { OFFLINE, AREAS } from './data.js';
 import { xpForLevel } from './xp.js';
+import { Coop } from './coop.js';
+import { CoopUI } from './coop-ui.js';
+
+let coop = null, coopUI = null;
 
 let game = null, scene = null, ui = null, raf = 0, saveT = 0;
 
@@ -32,7 +36,11 @@ function start(data) {
   } else { scene.g = game; scene.look = data.look; scene.floaters = []; }
   ui = new UI(game, resetCharacter); ui.onSheet = (o) => { scene.sheetOpen = o; };
   game.on((t, p) => { scene.onEvent(t, p); if (t === 'level' || t === 'die' || t === 'area') persist(); });
-  window.__ib = { game, scene, ui, catchUp, xpForLevel, AREAS };
+  coop?.leaveQuiet?.(); coop = new Coop(game); scene.coop = coop;
+  if (coopUI) { coopUI.btn.remove(); coopUI.ticker.remove(); }
+  coopUI = new CoopUI(coop, ui);
+  coop.on((t, p) => { if (t === 'peerswing' && (p.p.at === 'ranged' || p.p.at === 'magic') && p.p.tx != null) scene.shoot(p.p.x + 14 * (p.p.d || 1), 244, p.p.tx, 266, p.p.at === 'ranged' ? 'arrow' : 'wind', 1); });
+  window.__ib = { game, scene, ui, catchUp, xpForLevel, AREAS, coop, coopUI };
   $('create').hidden = true;
   scene.resize();
   ui.updateTarget();
@@ -41,7 +49,7 @@ function start(data) {
   cancelAnimationFrame(raf);
   const loop = (now) => {
     const dt = Math.min(0.25, (now - last) / 1000); last = now;
-    game.update(dt); scene.draw(now); ui.tick(dt);
+    game.update(dt); coop.tick(dt); scene.draw(now); ui.tick(dt);
     saveT += dt; game.data.stats.played += dt;
     if (saveT > 3) { saveT = 0; persist(); }
     raf = requestAnimationFrame(loop);

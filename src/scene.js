@@ -190,6 +190,18 @@ export class Scene {
       ctx.restore();
     }
     this.ghosts = this.ghosts.filter((x) => x.t < 0.8);
+    // co-op peers (same area): their hero, gear and attack animation, name + level, chat bubble
+    if (this.coop) for (const p of this.coop.peersHere()) {
+      const sp = p.swingT > 0 ? 1 - p.swingT / 0.45 : null, pn = p.tool ? NODES[p.tool] : null;
+      ctx.save(); ctx.globalAlpha = 0.97;
+      drawHero(ctx, p.rx, GROUND, 1.05, { look: p.look | 0, equip: p.eq || {}, dir: p.d >= 0 ? 1 : -1, state: Math.abs(p.rx - p.x) > 2 ? 'walk' : (p.s === 'gather' || p.s === 'attack') ? p.s : 'idle', t: this.t + p.rx * 0.01, tool: pn ? pn.tool : null, swingP: sp, atkType: p.at, two: p.tw, aim: 60 });
+      ctx.restore();
+      ctx.font = 'bold 11px system-ui,sans-serif'; ctx.textAlign = 'center';
+      const lbl = `${p.n} (lvl ${p.lv})`, w = ctx.measureText(lbl).width + 10;
+      ctx.fillStyle = 'rgba(20,16,30,.72)'; ctx.fillRect(p.rx - w / 2, GROUND - 112, w, 15); ctx.fillStyle = '#7fe0ff'; ctx.fillText(lbl, p.rx, GROUND - 101);
+      if (p.hp < 100) this.bar(p.rx, GROUND - 92, 40, p.hp / 100);
+      if (p.bubble) { ctx.font = '11px system-ui,sans-serif'; const tx = p.bubble.x.slice(0, 40), bw = ctx.measureText(tx).width + 12; ctx.fillStyle = 'rgba(255,255,240,.95)'; ctx.fillRect(p.rx - bw / 2, GROUND - 134, bw, 18); ctx.fillStyle = '#222'; ctx.fillText(tx, p.rx, GROUND - 121); }
+    }
     // hero
     const tn = tgt?.type === 'node' ? NODES[tgt.kind] : null, hc = g.combat;
     const swingP = h.swing > 0 && h.swingDur ? 1 - h.swing / h.swingDur : null;

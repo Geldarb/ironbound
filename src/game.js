@@ -815,8 +815,21 @@ export class Game {
       for (const [s, share] of o.xp || styleXp(this.combat.style)) this.gain(s, 4 * real * share);
       this.gain('hitpoints', 1.33 * real);
     }
-    if (m.hp <= 0) {
-      m.dead = def.respawn || 6; this.data.stats.kills++;
+    m.hitAt = Date.now();
+    if (this.net) this.net.damage(m, dmg);
+    if (m.hp <= 0) this.killMonster(m);
+  }
+  /** shared HP update from co-op: hp is authoritative. A kill grants loot only if we fought it recently */
+  applyRemoteHp(id, hp) {
+    const m = this.ents.find((e) => e.id === id && e.type === 'monster');
+    if (!m || m.dead > 0) return;
+    m.hp = Math.max(0, Math.min(m.max, hp));
+    if (m.hp <= 0) { if (m.hitAt && Date.now() - m.hitAt < 30000) this.killMonster(m); else { m.dead = MONSTERS[m.kind].respawn || 6; if (this.target === m.id) this.target = null; this.emit('kill', { id: m.id, kind: m.kind, x: m.x, shared: true }); } }
+  }
+  killMonster(m) {
+    const def = MONSTERS[m.kind];
+    {
+      m.dead = def.respawn || 6; m.hitAt = 0; this.data.stats.kills++;
       this.checkAchievements();
       // Slayer task progress
       const task = this.data.slayerTask;
