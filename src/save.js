@@ -1,6 +1,9 @@
 // Single-slot localStorage save (versioned; the shape leaves room for more skills / slots later).
-import { SKILL_IDS, SLOT_IDS, START_AREA } from './data.js';
-export const SAVE_VERSION = 6;
+import { SKILL_IDS, SLOT_IDS, START_AREA, AREAS } from './data.js';
+import { levelForXp } from './xp.js';
+/** v7: the old map (meadow/quarry/peaks) was replaced; send old area ids to the closest new area */
+export const AREA_RENAMES = { meadow: 'lumby', quarry: 'draynor', peaks: 'alkharid' };
+export const SAVE_VERSION = 7;
 export const SAVE_KEY = 'ironbound-save-v1';
 export const LOOKS = [
   { skin: '#f2c9a0', hair: '#5a3a1e', shirt: '#3b8eea' },
@@ -17,7 +20,7 @@ export function newData(name, look = 0) {
     bag: [{ id: 'bronze_pickaxe', n: 1 }, { id: 'bronze_axe', n: 1 }, { id: 'hammer', n: 1 }, { id: 'small_net', n: 1 }],
     bank: {}, equip: Object.fromEntries(SLOT_IDS.map((s) => [s, null])), visited: {}, stats: { kills: 0, played: 0 },
     autoEat: { on: true, pct: 50 }, lastSeen: 0, activity: null,
-    ep: 20, pity: 0, equipEnch: {}, bankGear: [], visitedAreas: { meadow: true },
+    ep: 20, pity: 0, equipEnch: {}, bankGear: [], visitedAreas: { [START_AREA]: true },
     prayerPoints: 1, activePrayers: [],
     slayerTask: null, slayerStreak: 0,
     energy: 100, special: 100, achievements: {},
@@ -38,7 +41,12 @@ export function migrate(d) {
   if ((d.v || 1) < 2 && !out.bag.some((x) => x.id === 'small_net') && out.bag.length < 28) out.bag.push({ id: 'small_net', n: 1 });
   out.equipEnch = d.equipEnch && typeof d.equipEnch === 'object' ? d.equipEnch : {};
   out.bankGear = Array.isArray(d.bankGear) ? d.bankGear : [];
-  out.visitedAreas = { meadow: true, ...(d.visitedAreas || {}), [out.area]: true };
+  // v6 -> v7: remap retired area ids (current area, saved activity, visited list) so old saves resume in the new world
+  const ren = (a) => AREA_RENAMES[a] || a;
+  out.area = AREAS[ren(out.area)] ? ren(out.area) : START_AREA;
+  if (out.activity) out.activity = { ...out.activity, area: ren(out.activity.area) };
+  const va = {}; for (const k of Object.keys(d.visitedAreas || {})) if (d.visitedAreas[k] && AREAS[ren(k)]) va[ren(k)] = true;
+  out.visitedAreas = { [START_AREA]: true, ...va, [out.area]: true };
   out.pity = Number(d.pity) || 0;
   // v2 -> v3: Enchant Points arrive (everyone gets a 20 EP welcome gift), weapons gain styles (stance ids stay valid), boots/gloves slots start empty
   out.ep = (d.v || 1) < 3 ? 20 + (Number(d.ep) || 0) : Number(d.ep) || 0;
@@ -46,9 +54,9 @@ export function migrate(d) {
   // v3 -> v4: Prayer skill + prayer points
   if ((d.v || 1) < 4) {
     out.xp.prayer = out.xp.prayer || 0;
-    out.prayerPoints = Math.max(1, Math.floor(out.xp.prayer > 0 ? Math.sqrt(out.xp.prayer / 10) : 1));
+    out.prayerPoints = levelForXp(out.xp.prayer || 0);
   }
-  out.prayerPoints = Number(out.prayerPoints) || 1;
+  out.prayerPoints = Math.min(levelForXp(out.xp.prayer || 0), Math.max(0, Number(out.prayerPoints) || 0)) || (d.prayerPoints === 0 ? 0 : 1);
   out.activePrayers = Array.isArray(d.activePrayers) ? d.activePrayers.filter((id) => typeof id === 'string') : [];
   // v4 -> v5: Slayer skill + task
   if ((d.v || 1) < 5) {
@@ -69,8 +77,8 @@ export function migrate(d) {
     out.special = 100;
     out.achievements = {};
   }
-  out.energy = Number(d.energy) || 100;
-  out.special = Number(d.special) || 100;
+  out.energy = Number.isFinite(d.energy) ? Math.max(0, Math.min(100, d.energy)) : 100;
+  out.special = Number.isFinite(d.special) ? Math.max(0, Math.min(100, d.special)) : 100;
   out.achievements = d.achievements && typeof d.achievements === 'object' ? d.achievements : {};
   out.v = SAVE_VERSION;
   return out;

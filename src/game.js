@@ -1,10 +1,12 @@
 // Game model: character state + the traversable-area simulation. No DOM here (the UI listens to `game.on`).
-import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood, stanceXp, PRAYERS, PRAYER_BY_ID, BONE_XP, BONES, SLAYER_TASKS, SPELLS, SPELL_BY_ID, ACHIEVEMENTS } from './data.js';
+import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood, stanceXp, PRAYERS, PRAYER_BY_ID, BONE_XP, BONES, SLAYER_TASKS, SPELLS, SPELL_BY_ID, ACHIEVEMENTS, styleXp, ARROW_IDS } from './data.js';
 import { levelForXp } from './xp.js';
 import { heroCombat, heroHitChance, monsterHitChance, combatLevel } from './combat.js';
-import { sumMods, rollEnchant, rollCost, nextPity, enchantCategory, gemFromMod, canCombineGems, combineGems as combineGemData, maxMods, MODS } from './enchant.js';
+import { sumMods, rollEnchant, rollCost, nextPity, enchantCategory, gemFromMod, canCombineGems, combineGems as combineGemData, maxMods, MODS, modText } from './enchant.js';
 
 export const TOOL_NAMES = { pickaxe: 'pickaxe', axe: 'axe', net: 'small fishing net', rod: 'fishing rod', harpoon: 'harpoon', cage: 'lobster pot', hammer: 'hammer' };
+/** Craft-tab menus that need no world station (knife/needle/essence work done anywhere) */
+export const NO_STATION = new Set(['fletch', 'craft', 'runecraft']);
 export const WALK_SPEED = 150;
 export const REACH = { monster: 46, node: 40, station: 56, sign: 50 };
 const REGEN_EVERY = 2;
@@ -26,6 +28,7 @@ export class Game {
     d.equipEnch ||= {}; d.bankGear ||= []; d.visitedAreas ||= { lumby: true }; d.ep ??= 0; d.pity ??= 0;
     d.prayerPoints ??= this.maxPrayer;
     d.activePrayers ||= [];
+    d.energy ??= 100; d.special ??= 100; d.achievements ||= {}; d.slayerStreak ??= 0; d.slayerTask ??= null;
     this.data.area = AREAS[this.data.area] ? this.data.area : 'lumby';
     this.enterArea(this.data.area, AREAS[this.data.area].spawn, true);
     this.data.hp = Math.min(this.data.hp || this.maxHp, this.maxHp);
@@ -53,11 +56,29 @@ export class Game {
       if (skill === 'prayer') this.data.prayerPoints = Math.min(this.maxPrayer, (this.data.prayerPoints || 0) + (after - before));
       this.emit('level', { skill, level: after });
       for (let l = before + 1; l <= after; l++) this.addEp(l % 10 === 0 ? 5 : 1, `${skill} ${l}`);
+      if (skill === 'magic' || skill === 'ranged') this.checkAchievements();
     }
   }
   /** enchant modifier totals from everything worn (+ the best tool for gathering, see gatherMods) */
   get mods() { return sumMods(Object.values(this.data.equipEnch)); }
-  get combat() { return heroCombat(this.levels, this.data.equip, this.data.stance, this.mods); }
+  /** levels with active stat prayers applied (RS: prayers boost the level used in the formulas) */
+  get boostedLevels() {
+    const lv = this.levels, ap = this.data.activePrayers || [];
+    if (!ap.length || this.prayerPoints <= 0) return lv;
+    const boost = { defence: [['thick_skin', 0.05], ['rock_skin', 0.1], ['steel_skin', 0.15]], strength: [['burst_of_strength', 0.05], ['superhuman_strength', 0.1], ['ultimate_strength', 0.15]], attack: [['clarity_of_thought', 0.05], ['improved_reflexes', 0.1], ['incredible_reflexes', 0.15]], ranged: [['eagle_eye', 0.15]], magic: [['mystic_might', 0.15]] };
+    const out = { ...lv };
+    for (const [sk, list] of Object.entries(boost)) { const f = Math.max(0, ...list.filter(([id]) => ap.includes(id)).map(([, v]) => v)); if (f) out[sk] = Math.floor(lv[sk] * (1 + f)); }
+    return out;
+  }
+  /** best arrows in the bag for an equipped bow */
+  get ammo() { return ARROW_IDS.find((id) => this.count(id) > 0) || null; }
+  /** spell a staff casts: the autocast spell if castable, else the best castable spell */
+  get activeSpell() {
+    const a = this.data.autocast && SPELL_BY_ID[this.data.autocast];
+    if (a && this.canCast(a.id)) return a;
+    return [...SPELLS].reverse().find((sp) => this.canCast(sp.id)) || null;
+  }
+  get combat() { return heroCombat(this.boostedLevels, this.data.equip, this.data.stance, this.mods, { ammo: this.ammo, spell: this.activeSpell }); }
   /** the stance actually in force (a weapon may not offer the saved one) */
   get stance() { return this.combat.stance; }
   setStance(id) { if (STANCE_BY_ID[id]) { this.data.stance = id; this.emit('change'); } }
@@ -138,17 +159,20 @@ export class Game {
     const sp = SPELL_BY_ID[spellId];
     if (!sp) return false;
     if (this.level('magic') < sp.level) return false;
-    for (const [rune, n] of Object.entries(sp.runes)) if (this.count(rune) < n) return false;
+    for (const [rune, n] of Object.entries(sp.runes)) if (rune !== this.freeRune && this.count(rune) < n) return false;
     return true;
   }
+  /** a rune the equipped staff supplies for free (Staff of air -> air runes) */
+  get freeRune() { return ITEMS[this.data.equip.weapon]?.infinite || null; }
+  spendRunes(sp) { for (const [rune, n] of Object.entries(sp.runes)) if (rune !== this.freeRune) this.removeItem(rune, n); }
   castSpell(spellId, target) {
     const sp = SPELL_BY_ID[spellId];
     if (!sp || !this.canCast(spellId)) { this.toast('Cannot cast'); return false; }
-    for (const [rune, n] of Object.entries(sp.runes)) this.removeItem(rune, n);
+    this.spendRunes(sp);
     this.gain('magic', sp.xp);
     if (target?.type === 'monster') {
-      const dmg = Math.floor(Math.random() * (sp.maxHit + 1));
-      this.hitMonster(target, dmg, {});
+      const dmg = Math.floor(this.rng() * (sp.maxHit + 1));
+      this.hitMonster(target, dmg, { xp: [['magic', 0.5]] });
     }
     this.toast(`Cast ${sp.name}`);
     this.emit('change');
@@ -156,8 +180,8 @@ export class Game {
   }
 
   // ---- Energy & Special
-  get energy() { return this.data.energy || 100; }
-  get special() { return this.data.special || 100; }
+  get energy() { return this.data.energy ?? 100; }
+  get special() { return this.data.special ?? 100; }
   useSpecial() {
     if (this.special < 25) { this.toast('Not enough special'); return false; }
     this.data.special = Math.max(0, this.special - 25);
@@ -176,7 +200,7 @@ export class Game {
   // ---- Achievements
   checkAchievements() {
     for (const a of ACHIEVEMENTS) {
-      if (this.data.achievements[a.id]) continue;
+      if ((this.data.achievements ||= {})[a.id]) continue;
       if (a.check(this)) {
         this.data.achievements[a.id] = true;
         if (a.reward.coins) this.data.coins += a.reward.coins;
@@ -275,7 +299,7 @@ export class Game {
   // ---- Crafting leather armor
   craftLeatherArmor(type) {
     const reqs = {
-      leather_body: { leather: 1, level: 1, xp: 25 },
+      leather_body: { soft_leather: 1, level: 1, xp: 25 },
       hardleather_body: { hard_leather: 1, level: 10, xp: 35 },
       studded_body: { hard_leather: 1, steel_studs: 1, level: 20, xp: 40 },
     };
@@ -318,8 +342,8 @@ export class Game {
     if (this.count('wolf_pelt') < 1) { this.toast('Need a wolf pelt'); return false; }
     this.removeItem('wolf_pelt', 1);
     this.gain('crafting', 15);
-    this.addItem('leather', 1);
-    this.toast('Crafted leather');
+    this.addItem('soft_leather', 1);
+    this.toast('Crafted soft leather');
     this.emit('change');
     return true;
   }
@@ -588,7 +612,7 @@ export class Game {
   // ---- crafting (furnace / anvil). Stations must have been visited (tapped in the world) once.
   stationVisited(st) { return st === 'cook' ? !!(this.data.visited.fire || this.data.visited.range) : !!this.data.visited[st]; }
   recipeStatus(r) {
-    if (!this.stationVisited(r.station) && r.station !== 'fletch' && r.station !== 'craft') return { ok: false, reason: r.station === 'cook' ? 'Visit a campfire or range first' : `Visit the ${STATIONS[r.station]?.name || r.station} first` };
+    if (!this.stationVisited(r.station) && !NO_STATION.has(r.station)) return { ok: false, reason: r.station === 'cook' ? 'Visit a campfire or range first' : `Visit the ${STATIONS[r.station]?.name || r.station} first` };
     const sk = r.skill || 'smithing';
     if (this.level(sk) < r.level) return { ok: false, reason: `${sk[0].toUpperCase() + sk.slice(1)} ${r.level}` };
     if (r.station === 'anvil' && !this.count('hammer')) return { ok: false, reason: 'Needs a hammer' };
@@ -606,7 +630,7 @@ export class Game {
       for (const [id, n] of Object.entries(r.inputs)) this.removeItem(id, n);
       const burn = r.stop ? burnChance(r, this.level(r.skill), !!this.data.visited.range) : 0;
       if (r.stop ? this.rng() >= burn : (r.chance >= 1 || this.rng() < r.chance)) {
-        if (!this.addItem(r.out, 1)) { res.reason = 'Bag is full'; break; }
+        if (!this.addItem(r.out, r.n || 1)) { res.reason = 'Bag is full'; break; }
         this.gain(r.skill || 'smithing', r.xp); res.done++;
         this.emit('craft', { id: r.out });
       } else { res.failed++; if (r.burnt) this.addItem(r.burnt, 1); this.emit('craftfail', { id: r.out }); }
@@ -704,7 +728,7 @@ export class Game {
     // regeneration when not in a fight
     if (!engaged && this.data.hp < this.maxHp) {
       this.regenT += dt;
-      if (this.regenT >= REGEN_EVERY / (1 + this.mods.regen)) { this.regenT = 0; this.data.hp = Math.min(this.maxHp, this.data.hp + 1); this.emit('hp'); }
+      if (this.regenT >= REGEN_EVERY / (1 + this.mods.regen) / (this.data.activePrayers.includes('rapid_heal') && this.prayerPoints > 0 ? 2 : 1)) { this.regenT = 0; this.data.hp = Math.min(this.maxHp, this.data.hp + 1); this.emit('hp'); }
     } else if (engaged) this.regenT = 0;
 
     // prayer point drain
@@ -730,22 +754,13 @@ export class Game {
     h.state = 'attack';
     if (h.cd <= 0) {
       const wep = ITEMS[this.data.equip.weapon];
-      // Ammo consumption for bows
-      if (wep?.wk === 'bow') {
-        const ammo = ['mithril_arrows', 'steel_arrows', 'iron_arrows', 'bronze_arrows'].find((id) => this.count(id) > 0);
-        if (!ammo) { this.toast('Out of arrows'); this.clearTarget(); return false; }
-        this.removeItem(ammo, 1);
-      }
-      // Autocast rune consumption
-      if (this.data.autocast && wep?.wk === 'staff') {
-        const sp = SPELL_BY_ID[this.data.autocast];
-        if (sp && this.canCast(sp.id)) {
-          for (const [rune, n] of Object.entries(sp.runes)) this.removeItem(rune, n);
-          this.gain('magic', sp.xp);
-        } else {
-          this.toast('Cannot autocast');
-          this.data.autocast = null;
-        }
+      // Ranged uses arrows from the bag; magic spends the spell's runes (staff 'Bash' style is melee and needs neither)
+      if (hc.type === 'ranged') {
+        if (!hc.ammo) { this.toast('Out of arrows'); this.clearTarget(); return false; }
+        this.removeItem(hc.ammo, 1);
+      } else if (hc.type === 'magic') {
+        if (!hc.spell) { this.toast(this.data.autocast ? 'Out of runes for that spell' : 'No spell you can cast (need runes)'); this.clearTarget(); return false; }
+        this.spendRunes(hc.spell); this.gain('magic', hc.spell.xp);
       }
       h.cd = hc.interval; h.swing = h.swingDur = Math.min(0.45, hc.interval * 0.6);
       this.emit('swing', { kind: wep?.wk || 'unarmed', type: hc.type, two: hc.two });
@@ -766,7 +781,7 @@ export class Game {
       const hit = this.rng() < monsterHitChance(hc, def);
       let dmg = hit ? Math.floor(this.rng() * (def.maxHit + 1)) : 0;
       // Protect prayers
-      if (this.data.activePrayers.includes('protect_from_melee')) dmg = Math.floor(dmg * 0.5);
+      if (this.data.activePrayers.includes('protect_from_melee') && this.prayerPoints > 0) dmg = Math.floor(dmg * 0.5); // all monsters are melee for now
       this.data.hp = Math.max(0, this.data.hp - dmg);
       if (dmg > 0) h.hurt = 0.3;
       this.emit('hit', { who: 'hero', x: h.x, dmg, miss: dmg === 0 });
@@ -783,11 +798,12 @@ export class Game {
     m.hp = Math.max(0, m.hp - dmg);
     this.emit('hit', { who: 'monster', id: m.id, x: m.x, dmg, miss: dmg === 0, crit: !!o.crit, burn: !!o.burn });
     if (real > 0) {
-      for (const [s, share] of stanceXp(this.stance)) this.gain(s, 4 * real * share);
+      for (const [s, share] of o.xp || styleXp(this.combat.style)) this.gain(s, 4 * real * share);
       this.gain('hitpoints', 1.33 * real);
     }
     if (m.hp <= 0) {
       m.dead = def.respawn || 6; this.data.stats.kills++;
+      this.checkAchievements();
       // Slayer task progress
       const task = this.data.slayerTask;
       if (task && task.monsters.includes(m.kind) && task.left > 0) {
@@ -842,6 +858,7 @@ export class Game {
       if (!got) { this.toast('Bag is full'); this.clearTarget(); return; }
       if (n.bait) this.removeItem(n.bait, 1);
       this.gain(n.skill, y.xp);
+      if (n.skill === 'mining') { this.data.stats.mined = (this.data.stats.mined || 0) + 1; this.checkAchievements(); }
       e.dead = n.respawn; e.cd = 0;
       this.emit('loot', { id: y.item, n: 1, x: e.x, node: true });
       this.emit('change');

@@ -1,6 +1,6 @@
 // Offline progress: a pure(ish) simulation of what the hero was doing while the tab was closed.
 // It works from expected values (no DOM, no timers), mutates the given Game, and returns a report for the "Welcome back" popup.
-import { MONSTERS, NODES, ITEMS, OFFLINE, SKILL_IDS, stanceXp, isFood } from './data.js';
+import { MONSTERS, NODES, ITEMS, OFFLINE, SKILL_IDS, styleXp, isFood, ARROW_IDS } from './data.js';
 import { heroHitChance, monsterHitChance, expectedDps } from './combat.js';
 import { sumMods } from './enchant.js';
 import { RETREAT_FRAC } from './game.js';
@@ -13,7 +13,7 @@ export function simulateOffline(game, awaySeconds, opts = {}) {
   const cap = (opts.capHours ?? OFFLINE.capHours) * 3600;
   const minAway = opts.minAway ?? OFFLINE.minAway;
   const used = Math.min(awaySeconds, cap);
-  const rep = { away: awaySeconds, used, capped: awaySeconds > cap, simulated: false, activity: null, kills: 0, catches: 0, ep: 0, epKills: 0, epLevels: 0, xp: {}, levels: [], items: {}, coins: 0, ate: {}, banked: 0, stopped: null };
+  const rep = { away: awaySeconds, used, capped: awaySeconds > cap, simulated: false, activity: null, kills: 0, catches: 0, ep: 0, epKills: 0, epLevels: 0, xp: {}, levels: [], items: {}, coins: 0, ate: {}, spent: {}, banked: 0, stopped: null };
   const act = game.data.activity;
   if (!act || awaySeconds < minAway) return rep;
   const kind = act.type === 'monster' ? MONSTERS[act.kind] : NODES[act.kind];
@@ -51,6 +51,20 @@ export function simulateOffline(game, awaySeconds, opts = {}) {
           const byHp = Math.floor(budget / loss);
           if (byHp < kills) { kills = byHp; rep.stopped = foods.length ? 'out of food' : 'low HP'; }
         }
+        // ranged / magic: each attack uses an arrow or one cast's runes, so supplies cap the kills
+        const perKill = Math.max(1, Math.ceil(ttk / hc.interval));
+        if (hc.type === 'ranged' || hc.type === 'magic') {
+          const sp = hc.spell, free = game.freeRune;
+          const shots = hc.type === 'ranged' ? ARROW_IDS.reduce((a, id) => a + game.count(id), 0)
+            : Math.min(...Object.entries(sp?.runes || { none: 1 }).map(([r, n]) => (r === free ? Infinity : Math.floor(game.count(r) / n))));
+          const byAmmo = Math.floor(shots / perKill);
+          if (byAmmo < kills) { kills = byAmmo; rep.stopped = hc.type === 'ranged' ? 'out of arrows' : 'out of runes'; }
+          if (kills > 0) {
+            let need = kills * perKill;
+            if (hc.type === 'ranged') for (const id of ARROW_IDS) { const k = Math.min(need, game.count(id)); if (k) { game.removeItem(id, k); need -= k; rep.spent[id] = (rep.spent[id] || 0) + k; } }
+            else { for (const [r, n] of Object.entries(sp.runes)) if (r !== free) { game.removeItem(r, n * need); rep.spent[r] = (rep.spent[r] || 0) + n * need; } game.gain('magic', sp.xp * need); }
+          }
+        }
         if (kills <= 0) break;
         // food: whatever the hp pool above the retreat line could not absorb is eaten (best food first)
         const pool = Math.max(0, hp - floorHp), total = kills * loss;
@@ -65,7 +79,7 @@ export function simulateOffline(game, awaySeconds, opts = {}) {
         }
         // xp for the damage dealt, per stance
         const dmg = kills * m.hp;
-        for (const [sk, share] of stanceXp(game.stance)) game.gain(sk, 4 * dmg * share);
+        for (const [sk, share] of styleXp(hc.style)) game.gain(sk, 4 * dmg * share);
         game.gain('hitpoints', 1.33 * dmg);
         for (const dr of m.drops) {
           const avg = (dr.n[0] + dr.n[1]) / 2;

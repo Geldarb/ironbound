@@ -1,8 +1,9 @@
 // DOM UI: HUD, target panel, stance row, nav + bottom sheets (gear, skills, bag/bank/shop, craft, map, settings).
-import { SKILLS, SKILL_BY_ID, STANCES, SLOTS, ITEMS, NODES, MONSTERS, AREAS, AREA_IDS, RECIPES, STATIONS, SHOP_BUY, BAG_SLOTS, TIERS, XP_RATE, WEAPON_KINDS, TIER_BAR, OFFLINE, nodeYields, burnChance, isFood, isStackable, PRAYERS, BONE_XP, BONES, SLAYER_TASKS, SLAYER_MASTER, SPELLS, ACHIEVEMENTS } from './data.js';
+import { SKILLS, SKILL_BY_ID, STANCES, SLOTS, ITEMS, NODES, MONSTERS, AREAS, AREA_IDS, RECIPES, STATIONS, SHOP_BUY, BAG_SLOTS, TIERS, XP_RATE, WEAPON_KINDS, ALL_WEAPON_KINDS, TIER_BAR, OFFLINE, nodeYields, burnChance, isFood, isStackable, PRAYERS, BONE_XP, BONES, SLAYER_TASKS, SLAYER_MASTER, SPELLS, ACHIEVEMENTS } from './data.js';
 import { levelProgress, xpForLevel } from './xp.js';
 import { RARITIES, rarityOf, modText, rollCost, enchantCategory, isEnchantable, PITY_EPIC, gemText, canCombineGems } from './enchant.js';
 import { heroHitChance, weaponKind } from './combat.js';
+import { NO_STATION } from './game.js';
 import { iconURL, tabIcon } from './art.js';
 import { $, el, esc, fmt, setText } from './dom.js';
 
@@ -56,12 +57,12 @@ export class UI {
   /** the stance row follows the wielded weapon: its own style names, damage types and trained skill */
   buildStance() {
     const row = $('stanceRow'); row.innerHTML = '';
-    const SH = { attack: 'Atk', strength: 'Str', defence: 'Def' };
+    const SH = { attack: 'Atk', strength: 'Str', defence: 'Def', ranged: 'Rng', magic: 'Mag' };
     const w = this.g.data.equip.weapon; this.stanceSig = w || '';
     for (const st of weaponKind(this.g.data.equip).styles) {
-      const info = STANCES.find((x) => x.id === st.stance);
-      const trains = info.xp.length > 1 ? 'All' : SH[info.xp[0]];
-      const b = el('button', 'st', `${st.name}<small>${st.type} · ${trains}</small>`); b.dataset.stance = st.stance; b.title = `${st.name} (${st.type}): ${info.blurb}`;
+      const info = STANCES.find((x) => x.id === st.stance), xs = st.xp || info.xp;
+      const trains = xs.length > 2 ? 'All' : xs.map((k) => SH[k]).join('+');
+      const b = el('button', 'st', `${st.name}<small>${st.type} · ${trains}</small>`); b.dataset.stance = st.stance; b.title = `${st.name} (${st.type}): trains ${xs.join(', ')}`;
       b.onclick = () => this.g.setStance(st.stance); row.appendChild(b);
     }
   }
@@ -80,7 +81,7 @@ export class UI {
     const ate = Object.entries(rep.ate).map(([id, n]) => `${n} ${itemName(id).toLowerCase()}`).join(', ');
     const what = rep.activity.type === 'monster' ? `fighting ${rep.activity.name.toLowerCase()}s (${rep.kills} defeated)` : `${rep.activity.name.toLowerCase()} (${rep.catches} gathered)`;
     const c = this.modal(`<div class="welcome" data-welcome="1"><h3>Welcome back, ${esc(this.g.data.name)}!</h3><div class="note">Away for <b>${dur(rep.away)}</b>${rep.capped ? ` (capped at ${dur(rep.used)})` : ''}. Your hero kept ${what} at ${Math.round(OFFLINE.efficiency * 100)}% pace.${rep.stopped ? ` Stopped early: <b>${esc(rep.stopped)}</b>.` : ''}</div>
-      <div class="lines">${lv}${xp}${rep.coins ? `<div class="ln"><span>Coins</span><b>+${fmt(rep.coins)}</b></div>` : ''}${rep.ep ? `<div class="ln" data-ep="1" style="color:#d9a6ff"><span>Enchant Points</span><b>+${fmt(rep.ep)}</b></div>` : ''}${ate ? `<div class="ln"><span>Food eaten</span><b>${esc(ate)}</b></div>` : ''}</div>${items ? `<div class="items">${items}</div>` : ''}${rep.banked ? `<div class="note">${rep.banked} items did not fit in your bag and went to the bank.</div>` : ''}
+      <div class="lines">${lv}${xp}${rep.coins ? `<div class="ln"><span>Coins</span><b>+${fmt(rep.coins)}</b></div>` : ''}${rep.ep ? `<div class="ln" data-ep="1" style="color:#d9a6ff"><span>Enchant Points</span><b>+${fmt(rep.ep)}</b></div>` : ''}${ate ? `<div class="ln"><span>Food eaten</span><b>${esc(ate)}</b></div>` : ''}${Object.keys(rep.spent || {}).length ? `<div class="ln"><span>Supplies used</span><b>${esc(Object.entries(rep.spent).map(([id, n]) => `${fmt(n)} ${itemName(id).toLowerCase()}`).join(', '))}</b></div>` : ''}</div>${items ? `<div class="items">${items}</div>` : ''}${rep.banked ? `<div class="note">${rep.banked} items did not fit in your bag and went to the bank.</div>` : ''}
       <button class="btn gold" id="mX" style="width:100%">Continue</button></div>`);
     c.querySelector('#mX').onclick = () => this.closeModal();
   }
@@ -148,7 +149,7 @@ export class UI {
       if (id) r.querySelector('button').onclick = () => g.unequip(s.id);
       b.appendChild(r);
     }
-    b.appendChild(el('p', 'note', 'Equip gear from your Bag. Smith it at the anvil in Starter Meadow. Higher tiers need more Attack/Defence.'));
+    b.appendChild(el('p', 'note', 'Equip gear from your Bag. Smith it at the anvil in Lumby. Higher tiers need more Attack/Defence.'));
   }
   openTanner() {
     const g = this.g;
@@ -189,20 +190,21 @@ export class UI {
   }
   r_magic(b) {
     const g = this.g;
-    b.appendChild(el('div', 'row', `<div class="tx"><b>Magic level ${g.level('magic')}</b><small>Cast spells in combat or use them from here.</small></div>`));
+    b.appendChild(el('div', 'row', `<div class="tx"><b>Magic level ${g.level('magic')}</b><small>Wield a staff and pick Cast: it autocasts the chosen spell (or your best one) using runes from the bag.</small></div>`));
     for (const s of SPELLS) {
       const can = g.level('magic') >= s.level;
-      const hasRunes = Object.entries(s.runes || {}).every(([id, n]) => g.count(id) >= n);
-      const r = el('div', 'row' + (can && hasRunes ? '' : ' off'), `<div class="tx"><b>${s.name}</b><small>Level ${s.level} · ${s.blurb}</small></div><button class="btn sm" ${can && hasRunes ? '' : 'disabled'}>Cast</button>`);
-      r.querySelector('button').onclick = () => g.castSpell(s.id);
+            const auto = g.data.autocast === s.id, ok = g.canCast(s.id);
+      const r = el('div', 'row' + (ok ? '' : ' off'), `<div class="tx"><b>${s.name}</b><small>Level ${s.level} · max hit ${s.maxHit} · ${Object.entries(s.runes).map(([id, n]) => `${n} ${ITEMS[id].name.replace(' rune', '')}`).join(' + ')}</small></div><div class="btns"><button class="btn sm" data-cast ${ok ? '' : 'disabled'}>Cast</button><button class="btn sm${auto ? ' gold' : ''}" data-auto ${ok || auto ? '' : 'disabled'}>${auto ? 'Auto ✓' : 'Auto'}</button></div>`);
+      r.dataset.spell = s.id;
+      r.querySelector('[data-cast]').onclick = () => { const t = g.targetEnt; g.castSpell(s.id, t?.type === 'monster' && t.dead <= 0 ? t : null); this.renderSheet(true); };
+      r.querySelector('[data-auto]').onclick = () => { g.setAutocast(auto ? null : s.id); this.renderSheet(true); };
       b.appendChild(r);
     }
   }
   r_skills(b) {
     const g = this.g;
-    b.appendChild(el('div', 'row', `<div class="tx"><b>Combat level ${g.combatLevel}</b><small>Attack, Strength, Defence, Hitpoints</small></div>`));
-    const core = ['attack', 'strength', 'defence', 'hitpoints', 'mining', 'smithing', 'fishing', 'cooking', 'woodcutting', 'slayer'];
-    for (const s of SKILLS.filter((x) => core.includes(x.id))) {
+    b.appendChild(el('div', 'row', `<div class="tx"><b>Combat level ${g.combatLevel}</b><small>Attack, Strength, Defence, Hitpoints, Ranged, Magic, Prayer</small></div>`));
+    for (const s of SKILLS) {
       const xp = g.data.xp[s.id], lv = g.level(s.id);
       const r = el('div', 'row', `<div class="tx"><b>${s.name} <span style="float:right;color:var(--gold)">${lv}</span></b><small>${lv >= 99 ? 'Max level' : `${fmt(xp)} xp · ${fmt(xpForLevel(lv + 1) - xp)} to next`}</small><div class="xpbar"><i style="width:${Math.round(levelProgress(xp) * 100)}%;background:${s.color}"></i></div></div>`);
       r.dataset.skill = s.id; b.appendChild(r);
@@ -250,7 +252,7 @@ export class UI {
       gr.appendChild(cell(s.id, s.n, s.e, () => this.itemInfo(s.id, i), i, s.gem));
     }
     b.appendChild(gr);
-    b.appendChild(el('p', 'note', 'Tap an item to inspect, compare or equip it. Bank chest, altar and store are in Starter Meadow.'));
+    b.appendChild(el('p', 'note', 'Tap an item to inspect, compare or equip it. Bank chest, altar and store are in Lumby.'));
   }
   /** item inspect/compare popup (idx = bag slot, so enchanted copies are told apart) */
   itemInfo(id, idx = -1) {
@@ -260,7 +262,7 @@ export class UI {
     let extra = '';
     if (it.slot) {
       const c = g.canEquip(id), cur = ITEMS[g.data.equip[it.slot]];
-      extra = `${statLine(it)}<br>${it.wk ? `<span style="color:var(--dim)">${WEAPON_KINDS[it.wk].blurb} · styles: ${WEAPON_KINDS[it.wk].styles.map((x) => `${x.name} (${x.type})`).join(', ')}</span><br>` : ''}<span class="${c.ok ? 'ok' : 'no'}">${c.ok ? `Requires ${cap(it.req.skill)} ${it.req.level}` : c.reason}</span>`;
+      extra = `${statLine(it)}<br>${it.wk ? `<span style="color:var(--dim)">${ALL_WEAPON_KINDS[it.wk]?.blurb || ''} · styles: ${(ALL_WEAPON_KINDS[it.wk]?.styles || []).map((x) => `${x.name} (${x.type})`).join(', ')}</span><br>` : ''}<span class="${c.ok ? 'ok' : 'no'}">${c.ok ? `Requires ${cap(it.req.skill)} ${it.req.level}` : c.reason}</span>`;
       if (cur && cur.id !== id) extra += `<br><span style="color:var(--dim)">vs ${esc(cur.name)}: ${compareText(it, cur)}</span>`;
       else if (!cur) extra += '<br><span style="color:var(--dim)">Slot is empty</span>';
     } else if (it.tool) extra = `Tool: ${it.tool}${it.toolTier ? ` (tier ${it.toolTier + 1}, faster)` : ''}`;
@@ -349,13 +351,13 @@ export class UI {
   }
   r_craft(b) {
     const g = this.g, menu = this.craftMenu;
-    const MENUS = { furnace: 'Smelting', anvil: 'Smithing', cook: 'Cooking', fletch: 'Fletching', craft: 'Crafting' };
-    const seg = el('div', 'seg', Object.entries(MENUS).map(([k, nm]) => `<button data-menu="${k}" class="${k === menu ? 'on' : ''}">${nm}</button>`).join(''));
+    const MENUS = { furnace: 'Smelting', anvil: 'Smithing', cook: 'Cooking', fletch: 'Fletching', craft: 'Crafting', runecraft: 'Runecraft' };
+    const seg = el('div', 'seg menus', Object.entries(MENUS).map(([k, nm]) => `<button data-menu="${k}" class="${k === menu ? 'on' : ''}">${nm}</button>`).join(''));
     seg.querySelectorAll('button').forEach((x) => { x.onclick = () => { this.craftMenu = x.dataset.menu; this.renderSheet(); $('sheetBody').scrollTop = 0; }; });
     b.appendChild(seg);
-    const sk = menu === 'cook' ? 'cooking' : menu === 'fletch' ? 'fletching' : menu === 'craft' ? 'crafting' : 'smithing';
-    if (!g.stationVisited(menu) && menu !== 'fletch' && menu !== 'craft') b.appendChild(el('div', 'warn', menu === 'cook' ? 'Walk up to a campfire or range (tap it) to unlock cooking. Starter Meadow has both.' : `Walk to the ${STATIONS[menu].name} in Starter Meadow (tap it) to unlock this menu.`));
-    else b.appendChild(el('p', 'note', (menu === 'cook' ? `${g.data.visited.range ? 'Using a range (fewer burnt)' : 'Using a campfire (find a range to burn less)'}. ` : (STATIONS[menu]?.blurb || '') + ' ') + `${cap(sk)} level ${g.level(sk)}.`));
+    const sk = { cook: 'cooking', fletch: 'fletching', craft: 'crafting', runecraft: 'runecrafting' }[menu] || 'smithing';
+    if (!g.stationVisited(menu) && !NO_STATION.has(menu)) b.appendChild(el('div', 'warn', menu === 'cook' ? 'Walk up to a campfire or range (tap it) to unlock cooking. Lumby has both.' : `Walk to the ${STATIONS[menu].name} in Lumby (tap it) to unlock this menu.`));
+    else b.appendChild(el('p', 'note', (menu === 'cook' ? `${g.data.visited.range ? 'Using a range (fewer burnt)' : 'Using a campfire (find a range to burn less)'}. ` : (STATIONS[menu]?.blurb || { fletch: 'Knife work: logs into shafts, bows and staves; feathers and tips into arrows.', craft: 'Needle work: leather into armour.', runecraft: 'Bind rune essence into runes.' }[menu] || '') + ' ') + `${cap(sk)} level ${g.level(sk)}.`));
     if (menu === 'anvil') {
       if (this.smithTier == null) this.smithTier = 0;
       const chips = el('div', 'seg', TIERS.map((t, i) => `<button data-tier="${i}" class="${i === this.smithTier ? 'on' : ''}" style="padding:0 2px;font-size:12px">${t.name}</button>`).join(''));
@@ -377,7 +379,7 @@ export class UI {
     const g = this.g, A = (this.altar ||= { loc: null, cand: null, lock: -1 });
     if (A.loc && !isEnchantable(g.idOf(A.loc))) A.loc = null;
     b.appendChild(el('div', 'row', `<div class="tx"><b>✨ ${g.ep} Enchant Points</b><small>Pity ${g.data.pity}/${PITY_EPIC}: a Rare+ is guaranteed at 10 dry rolls, an Epic+ at 20. Rarities: ${RARITIES.map((r) => `<span style="color:${r.color}">${r.name}</span>`).join(', ')}.</small></div>`));
-    if (!g.stationVisited('altar') && !A.loc) b.appendChild(el('div', 'warn', 'Tip: the altar itself stands in Starter Meadow, but you can use it from here.'));
+    if (!g.stationVisited('altar') && !A.loc) b.appendChild(el('div', 'warn', 'Tip: the altar itself stands in Lumby, but you can use it from here.'));
     const locKey = (l) => (l.where === 'bag' ? `b${l.idx}` : `e${l.slot}`);
     const items = [];
     for (const s of SLOTS) if (g.data.equip[s.id] && isEnchantable(g.data.equip[s.id])) items.push({ where: 'equip', slot: s.id });
@@ -460,18 +462,21 @@ export class UI {
 /** one-line stats for an item */
 function statLine(it) {
   if (!it.bonus) return '';
+  if (it.wk === 'bow') return `Ranged +${it.bonus.rng || 0} · ${it.interval}s · 2H · uses arrows`;
+  if (it.wk === 'staff') return `Magic +${it.bonus.mag || 0} · ${it.interval}s · 2H${it.infinite ? ` · unlimited ${ITEMS[it.infinite].name.toLowerCase()}s` : ''}`;
   if (it.wk) { const a = it.bonus.a; return `Stab ${a.stab} · Slash ${a.slash} · Crush ${a.crush} · Str +${it.bonus.str} · ${it.interval}s${it.two ? ' · 2H' : ''}${it.reach ? ` · reach +${it.reach}` : ''}`; }
-  if (it.bonus.def) return `Def +${it.bonus.def} · ${TIERS[it.tier].name}`;
-  return `${TIERS[it.tier].name}`;
+  const tn = TIERS[it.tier]?.name || (it.req ? `${cap(it.req.skill)} ${it.req.level}` : '');
+  if (it.bonus.def) return `Def +${it.bonus.def}${tn ? ` · ${tn}` : ''}`;
+  return tn;
 }
 /** what changes if `it` replaces `cur` */
 function compareText(it, cur) {
   const d = (n) => (n > 0 ? `+${n}` : String(n)), parts = [];
   if (it.wk || cur.wk) {
-    for (const t of ['stab', 'slash', 'crush']) { const v = (it.bonus.a?.[t] || 0) - (cur.bonus.a?.[t] || 0); if (v) parts.push(`${t} ${d(v)}`); }
-    const sv = (it.bonus.str || 0) - (cur.bonus.str || 0); if (sv) parts.push(`str ${d(sv)}`);
+    for (const t of ['stab', 'slash', 'crush', 'rng', 'mag']) { const v = (t.length > 3 ? it.bonus?.a?.[t] || 0 : it.bonus?.[t] || 0) - (t.length > 3 ? cur.bonus?.a?.[t] || 0 : cur.bonus?.[t] || 0); if (v) parts.push(`${{ rng: 'ranged', mag: 'magic' }[t] || t} ${d(v)}`); }
+    const sv = (it.bonus?.str || 0) - (cur.bonus?.str || 0); if (sv) parts.push(`str ${d(sv)}`);
     const iv = Math.round(((it.interval || 0) - (cur.interval || 0)) * 10) / 10; if (iv) parts.push(`${Math.abs(iv)}s ${iv < 0 ? 'faster' : 'slower'}`);
-  } else { const v = it.bonus.def - cur.bonus.def; if (v) parts.push(`def ${d(v)}`); }
+  } else { const v = (it.bonus?.def || 0) - (cur.bonus?.def || 0); if (v) parts.push(`def ${d(v)}`); }
   return parts.join(' · ') || 'same stats';
 }
 function bonusText(it) { return statLine(it); }

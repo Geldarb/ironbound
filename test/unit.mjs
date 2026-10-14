@@ -6,7 +6,8 @@ import { simulateOffline } from '../src/offline.js';
 import { RARITIES, rollRarity, rollEnchant, rollMods, rollCost, sumMods, nextPity, enchantCategory, MODS, PITY_RARE, PITY_EPIC } from '../src/enchant.js';
 import { expectedDps, heroHitChance, monsterDefRoll, weaponKind, activeStyle } from '../src/combat.js';
 import { Game } from '../src/game.js';
-import { newData, migrate } from '../src/save.js';
+import { newData, migrate, SAVE_VERSION } from '../src/save.js';
+import { AREA_IDS } from '../src/data.js';
 import { mulberry32 } from '../src/rng.js';
 
 let failed = 0, n = 0;
@@ -65,7 +66,7 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   g.data.bag = []; g.hammer = 0;
   g.addItem('bronze_bar', 3); check(!g.craft('bronze_dagger', 1).done, 'anvil needs a hammer');
   check(RECIPES.every((x) => ITEMS[x.out] && Object.keys(x.inputs).every((i) => ITEMS[i])), 'recipes reference real items');
-  check(RECIPES.filter((x) => x.station === 'anvil').length === 108, 'smithing recipes: 18 kinds x 6 tiers');
+  check(RECIPES.filter((x) => x.station === 'anvil' && !/arrowtips|studs/.test(x.id)).length === 108, 'smithing recipes: 18 kinds x 6 tiers');
 }
 
 // --- bag, bank, shop
@@ -110,25 +111,25 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   for (let i = 0; i < 1200; i++) g.update(0.05);
   check(g.count('logs') >= 2 && g.data.xp.woodcutting >= 50, 'woodcutting');
   const iron = g.ents.find((e) => e.kind === 'iron');
-  g.travel('quarry'); check(g.data.area === 'meadow', 'quarry locked below combat 10');
+  check(AREA_IDS.every((a) => g.areaUnlocked(a)), 'every area is open (world rework: no combat gates)');
   g.data.bag = g.data.bag.filter((s) => s.id !== 'bronze_pickaxe'); const cu2 = g.ents.find((e) => e.kind === 'tin');
   check(!g.select(cu2.id), 'gathering needs a tool'); void iron;
   g.data.bag.push({ id: 'bronze_pickaxe', n: 1 });
   
   for (const s of ['attack', 'strength', 'defence']) setLv(g, s, 15);
-  check(g.combatLevel >= 10 && g.travel('quarry') && g.data.area === 'quarry', 'quarry unlocks at combat 10');
+  check(g.travel('draynor') && g.data.area === 'draynor', 'travel to Draynor');
   const ir = g.ents.find((e) => e.kind === 'iron');
   check(!g.select(ir.id), 'iron needs Mining 15'); setLv(g, 'mining', 15); check(g.select(ir.id), 'iron at Mining 15');
 }
 {
   const g = mk(5); g.data.hp = 1; g.data.xp.hitpoints = xpForLevel(1) + 0;
-  g.travel('meadow'); g.data.hp = 1;
+  g.travel('lumby'); g.data.hp = 1;
   const w = { ...MONSTERS.wolf }; void w;
-  g.enterArea('quarry', 1000); const wolf = g.ents.find((e) => e.kind === 'wolf');
+  g.enterArea('edgeville', 1000); const wolf = g.ents.find((e) => e.kind === 'wolf');
   g.data.hp = 2; g.select(wolf.id);
   for (let i = 0; i < 400; i++) g.update(0.05);
   check(g.target === null || g.data.hp === g.maxHp, 'low HP retreats or dies back to start');
-  check(Object.keys(AREAS).length === 3 && Object.values(NODES).every((x) => nodeYields(x).every((y) => ITEMS[y.item])), 'area/node tables sane');
+  check(Object.keys(AREAS).length === 10 && Object.values(NODES).every((x) => nodeYields(x).every((y) => ITEMS[y.item])), 'area/node tables sane');
 }
 
 // --- saves
@@ -136,7 +137,7 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   const d = newData('Alice', 2);
   check(d.xp.hitpoints === 1154 && d.bag.length === 4 && d.name === 'Alice', 'new character');
   const m = migrate({ name: 'Old', xp: { attack: 500 } });
-  check(m.xp.attack === 500 && m.xp.mining === 0 && Array.isArray(m.bag) && m.equip.weapon === null && m.v === 3 && m.xp.fishing === 0 && m.autoEat.pct === 50, 'migration fills missing fields');
+  check(m.xp.attack === 500 && m.xp.mining === 0 && Array.isArray(m.bag) && m.equip.weapon === null && m.v === SAVE_VERSION && m.xp.fishing === 0 && m.autoEat.pct === 50, 'migration fills missing fields');
   const g = new Game(JSON.parse(JSON.stringify(d))); g.data.xp.mining = 300;
   const g2 = new Game(migrate(JSON.parse(JSON.stringify(g.data))));
   check(g2.level('mining') === levelForXp(300) && g2.data.hp <= g2.maxHp, 'save round-trip');
@@ -168,14 +169,14 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   check(g.gatherChance(NODES.pond) > lowChance && g.gatherChance(NODES.pond) <= 0.9, 'catch chance rises with level, capped');
   g.data.bag = g.data.bag.filter((s) => s.id !== 'small_net'); g.clearTarget();
   check(!g.select(pond.id), 'fishing needs the right tool');
-  g.enterArea('quarry', 900); const stream = g.ents.find((e) => e.kind === 'stream');
+  g.enterArea('draynor', 900); const stream = g.ents.find((e) => e.kind === 'stream');
   g.data.bag.push({ id: 'fishing_rod', n: 1 });
   check(!g.select(stream.id), 'rod fishing needs bait (feathers)');
   g.addItem('feather', 3); g.data.xp.fishing = xpForLevel(20);
   check(g.select(stream.id), 'rod + bait at Fishing 20');
   for (let i = 0; i < 3000; i++) g.update(0.05);
   check(g.count('feather') === 0 && g.count('raw_trout') + g.count('raw_salmon') === 3 && g.target === null, 'bait is consumed per catch, fishing stops when out');
-  const g3 = mk(); g3.enterArea('quarry', 900); g3.data.xp.fishing = xpForLevel(30);
+  const g3 = mk(); g3.enterArea('draynor', 900); g3.data.xp.fishing = xpForLevel(30);
   check(nodeYields(NODES.stream).filter((y) => y.level <= 30).length === 2, 'level unlocks better fish');
 }
 
@@ -184,7 +185,7 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   const r = RECIPE_BY_ID.cook_shrimp;
   check(near(burnChance(r, 1, false), 0.5 * 29 / 29) && burnChance(r, 1, true) < burnChance(r, 1, false), 'range burns less than fire');
   check(burnChance(r, 15, false) < burnChance(r, 1, false) && burnChance(r, 30, true) === 0, 'burn chance falls with level, zero at the stop level');
-  check(COOKABLE.length === 10 && RECIPES.filter((x) => x.station === 'cook').length === 10, 'recipes for 7 fish + 3 meats');
+  check(COOKABLE.length === 11 && RECIPES.filter((x) => x.station === 'cook').length === 11, 'recipes for 7 fish + 4 meats (rat added)');
   check(FOOD.find((f) => f[0] === 'shrimp')[3] === 3 && ITEMS.trout.heal === 7 && ITEMS.salmon.heal === 9 && ITEMS.tuna.heal === 10 && ITEMS.lobster.heal === 12 && ITEMS.swordfish.heal === 14 && ITEMS.cooked_chicken.heal === 3 && ITEMS.anchovies.heal === 1, 'RS-like healing values');
   const g = mk(5); g.addItem('raw_shrimp', 40);
   check(!g.craft('cook_shrimp', 1).done, 'must find a fire or range first');
@@ -210,15 +211,15 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   g.data.hp = 10; check(!g.eat('shrimp'), 'no eating at full HP');
   // auto-eat inside a fight
   const f = mk(2); f.data.xp.hitpoints = xpForLevel(20); f.data.hp = 20; f.addItem('lobster', 5); f.setAutoEat(true, 50);
-  f.enterArea('quarry', 1000); f.select(f.ents.find((e) => e.kind === 'wolf').id);
+  f.enterArea('edgeville', 1000); f.select(f.ents.find((e) => e.kind === 'wolf').id);
   for (let i = 0; i < 2400; i++) f.update(0.05);
   check(f.count('lobster') < 5 && f.data.hp > 0, `auto-eat consumed food during the fight (left ${f.count('lobster')})`);
   const nf = mk(2); nf.data.xp.hitpoints = xpForLevel(20); nf.data.hp = 9; nf.setAutoEat(false); nf.addItem('lobster', 5);
-  nf.enterArea('quarry', 1000); nf.select(nf.ents.find((e) => e.kind === 'wolf').id);
+  nf.enterArea('edgeville', 1000); nf.select(nf.ents.find((e) => e.kind === 'wolf').id);
   for (let i = 0; i < 600; i++) nf.update(0.05);
   check(nf.count('lobster') === 5, 'auto-eat off: food untouched (hero retreats instead)');
   const cf = mk(2); cf.data.xp.hitpoints = xpForLevel(20); cf.data.hp = 6; cf.setAutoEat(true, 30); cf.addItem('lobster', 20);
-  cf.enterArea('quarry', 1000); cf.select(cf.ents.find((e) => e.kind === 'wolf').id);
+  cf.enterArea('edgeville', 1000); cf.select(cf.ents.find((e) => e.kind === 'wolf').id);
   for (let i = 0; i < 400; i++) cf.update(0.05);
   check(cf.count('lobster') < 20 || cf.data.hp > 8, 'auto-eat kicks in at the threshold before retreating');
 }
@@ -237,7 +238,7 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   check(rc.capped && rc.used === 3 * 3600 && rc.kills === r3.kills, 'offline time is capped (3h)');
   const half = simulateOffline(fight(), 3600, { rng: mulberry32(1), efficiency: 1 }); check(half.kills > r.kills * 1.6, 'efficiency scales the result');
   // danger: wolf at low level => stops, never dies; food extends it
-  const wolfy = (food) => { const w = mk(4); w.enterArea('quarry', 1000); w.data.bag.push(...(food ? [{ id: 'lobster', n: food }] : [])); w.data.hp = w.maxHp; w.select(w.ents.find((e) => e.kind === 'wolf').id); w.snapshot(1000); return w; };
+  const wolfy = (food) => { const w = mk(4); w.enterArea('edgeville', 1000); w.data.bag.push(...(food ? [{ id: 'lobster', n: food }] : [])); w.data.hp = w.maxHp; w.select(w.ents.find((e) => e.kind === 'wolf').id); w.snapshot(1000); return w; };
   const w0 = wolfy(0), rw0 = simulateOffline(w0, 7200, { rng: mulberry32(2) });
   check(rw0.stopped && rw0.kills <= 1 && w0.data.hp >= 1, `wolf without food: stops (${rw0.stopped}, ${rw0.kills} kills) and survives`);
   const wf = wolfy(5); for (const k of ['attack', 'strength', 'defence', 'hitpoints']) wf.data.xp[k] = xpForLevel(50); wf.data.hp = wf.maxHp;
@@ -251,7 +252,7 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   check(rm.catches > 100 && mine.count('copper_ore') === rm.items.copper_ore && rm.xp.mining > 0 && rm.levels.some((l) => l.skill === 'mining'), `mining 1h: ${rm.catches} ore, level-ups ${rm.levels.length}`);
   const fish = mk(6); fish.select(fish.ents.find((e) => e.kind === 'pond').id); fish.snapshot(1000);
   const rf = simulateOffline(fish, 3600, { rng: mulberry32(3) }); check(rf.catches > 100 && (rf.items.raw_shrimp || 0) > 0 && rf.xp.fishing > 0, 'fishing 1h');
-  const bait = mk(6); bait.enterArea('quarry', 900); bait.data.bag.push({ id: 'fishing_rod', n: 1 }); bait.data.xp.fishing = xpForLevel(20); bait.addItem('feather', 7); bait.select(bait.ents.find((e) => e.kind === 'stream').id); bait.snapshot(1000);
+  const bait = mk(6); bait.enterArea('draynor', 900); bait.data.bag.push({ id: 'fishing_rod', n: 1 }); bait.data.xp.fishing = xpForLevel(20); bait.addItem('feather', 7); bait.select(bait.ents.find((e) => e.kind === 'stream').id); bait.snapshot(1000);
   const rb = simulateOffline(bait, 7200, { rng: mulberry32(3) }); check(rb.catches === 7 && rb.stopped === 'out of bait' && bait.count('feather') === 0, 'fishing offline stops when bait runs out');
   const full = mk(6); full.data.bag = []; for (let i = 0; i < 27; i++) full.data.bag.push({ id: `bronze_dagger`, n: 1 }); full.data.bag.push({ id: 'bronze_pickaxe', n: 1 }); full.select(full.ents.find((e) => e.kind === 'copper').id); full.snapshot(1000);
   const rfull = simulateOffline(full, 3600, { rng: mulberry32(3) }); check(rfull.banked > 0 && full.slotsUsed <= 28 && (full.data.bank.copper_ore || 0) + full.count('copper_ore') === rfull.catches, 'overflow is auto-banked');
@@ -266,24 +267,24 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   const strong = (kind, area, seed = 7) => { const w = mk(seed); w.enterArea(area, 1000); for (const k of ['attack', 'strength', 'defence', 'hitpoints']) w.data.xp[k] = xpForLevel(70); w.data.hp = w.maxHp; w.data.equip.weapon = 'iron_scimitar'; w.data.bag.push({ id: 'lobster', n: 500 }); w.data.autoEat.on = true; w.select(w.ents.find((e) => e.kind === kind).id); w.snapshot(1000); return w; };
   const levelEp = (before, after) => { let t = 0; for (const k of Object.keys(before)) for (let l = before[k] + 1; l <= after[k]; l++) t += l % 10 === 0 ? 5 : 1; return t; };
   // wolves: per-kill chance (12%) over the simulated (50% pace) kills + level-ups
-  const w = strong('wolf', 'quarry'), lv0 = w.levels, ep0 = w.data.ep;
+  const w = strong('wolf', 'edgeville'), lv0 = w.levels, ep0 = w.data.ep;
   const r = simulateOffline(w, 7200, { rng: mulberry32(11) });
   check(r.kills > 10 && r.epKills >= Math.floor(r.kills * 0.12) && r.epKills <= Math.ceil(r.kills * 0.12), `offline kill EP follows the per-kill chance (${r.epKills} EP for ${r.kills} kills)`);
   check(r.epLevels === levelEp(lv0, w.levels) && r.epLevels > 0, `level-ups offline grant the level-up EP (${r.epLevels})`);
   check(r.ep === r.epKills + r.epLevels && w.data.ep === ep0 + r.ep, 'report total = kill EP + level EP and is applied to the character');
   // determinism: same seed, same grant
-  const w2 = strong('wolf', 'quarry'), r2 = simulateOffline(w2, 7200, { rng: mulberry32(11) });
+  const w2 = strong('wolf', 'edgeville'), r2 = simulateOffline(w2, 7200, { rng: mulberry32(11) });
   check(r2.ep === r.ep && w2.data.ep === w.data.ep, 'EP grant is deterministic for a seed');
   // efficiency: full pace roughly doubles the chance-based EP; zero kills => zero kill EP
-  const full = strong('wolf', 'quarry'), rf = simulateOffline(full, 7200, { rng: mulberry32(11), efficiency: 1 });
+  const full = strong('wolf', 'edgeville'), rf = simulateOffline(full, 7200, { rng: mulberry32(11), efficiency: 1 });
   check(rf.epKills > r.epKills * 1.6, `50% offline efficiency halves chance-based EP (${r.epKills} vs ${rf.epKills} at 100%)`);
   // boss: flat 8 EP per kill, no double counting
-  const b = strong('alpha_wolf', 'quarry', 5), rb = simulateOffline(b, 3 * 3600, { rng: mulberry32(2) });
+  const b = strong('alpha_wolf', 'edgeville', 5), rb = simulateOffline(b, 3 * 3600, { rng: mulberry32(2) });
   check(rb.kills >= 1 && rb.epKills === rb.kills * 8, `boss kills grant 8 EP each offline (${rb.kills} kills, ${rb.epKills} EP)`);
   // chickens: tiny chance, never negative, and gathering gives only level-up EP
-  const c = strong('chicken', 'meadow'), rc = simulateOffline(c, 3600, { rng: mulberry32(3) });
+  const c = strong('chicken', 'lumby'), rc = simulateOffline(c, 3600, { rng: mulberry32(3) });
   check(rc.epKills <= Math.ceil(rc.kills * 0.03) && rc.ep >= 0, 'chicken EP chance is small');
-  const m = mk(9); m.enterArea('meadow', 1000); m.data.xp.mining = xpForLevel(10) - 30; m.select(m.ents.find((e) => e.kind === 'copper').id); m.snapshot(1000);
+  const m = mk(9); m.enterArea('lumby', 1000); m.data.xp.mining = xpForLevel(10) - 30; m.select(m.ents.find((e) => e.kind === 'copper').id); m.snapshot(1000);
   const ep1 = m.data.ep, rm = simulateOffline(m, 3600, { rng: mulberry32(4) });
   check(rm.catches > 0 && rm.epKills === 0 && m.level('mining') >= 10 && rm.epLevels >= 5 && m.data.ep === ep1 + rm.ep, `gathering offline: level 10 gives +5 EP rule (${rm.epLevels} EP from levels)`);
   check(simulateOffline(mk(), 30).ep === 0, 'no EP when away under the minimum');
@@ -353,7 +354,7 @@ check(ITEMS.rune_body.req.level === 40 && ITEMS.rune_body.req.skill === 'defence
   // boots/gloves slots exist
   check(ITEMS.iron_boots.slot === 'boots' && ITEMS.iron_gloves.slot === 'gloves' && 'boots' in newData('x').equip, 'boots and gloves slots');
   // upper-tier ore data
-  check(NODES.coal.level === 30 && NODES.mithril.level > NODES.coal.level && NODES.runite.level === 85 && AREAS.quarry.entities.some((e) => e[1] === 'coal') && AREAS.peaks.entities.some((e) => e[1] === 'adamant'), 'coal in the quarry, mithril/adamant/rune in the peaks');
+  check(NODES.coal.level === 30 && NODES.mithril.level > NODES.coal.level && NODES.runite.level === 85 && AREAS.draynor.entities.some((e) => e[1] === 'coal') && AREAS.wilderness.entities.some((e) => e[1] === 'adamant'), 'coal in Draynor, adamant/rune in the Wilderness');
   // smithing a weapon: iron scimitar needs 2 bars at level 19
   const sm = mk(); sm.data.visited.anvil = true; sm.addItem('iron_bar', 2); setLv(sm, 'smithing', 18);
   check(!sm.recipeStatus(RECIPE_BY_ID.iron_scimitar).ok, 'scimitar locked at smithing 18'); setLv(sm, 'smithing', 19);
@@ -431,8 +432,8 @@ check(MONSTERS.alpha_wolf.boss && MONSTERS.alpha_wolf.epFlat >= 5 && MONSTERS.al
   const e = mk(); const ep0 = e.data.ep;
   e.gain('attack', 100); // level-up(s)
   check(e.data.ep > ep0, 'level-ups grant EP'); const ep1 = e.data.ep;
-  setLv(e, 'quarry', 1); e.data.xp.attack = xpForLevel(30); e.data.xp.strength = xpForLevel(30); e.data.xp.defence = xpForLevel(30); e.data.xp.hitpoints = xpForLevel(30);
-  e.travel('quarry'); check(e.data.ep === ep1 + 10 && e.data.visitedAreas.quarry, 'first visit to an area grants 10 EP'); e.travel('meadow'); e.travel('quarry');
+   e.data.xp.attack = xpForLevel(30); e.data.xp.strength = xpForLevel(30); e.data.xp.defence = xpForLevel(30); e.data.xp.hitpoints = xpForLevel(30);
+  e.travel('draynor'); check(e.data.ep === ep1 + 10 && e.data.visitedAreas.draynor, 'first visit to an area grants 10 EP'); e.travel('lumby'); e.travel('draynor');
   check(e.data.ep === ep1 + 10, 'only the first visit counts');
   const b = mk(3); const wolfA = b.ents.length; void wolfA;
   b.data.ep = 0; b.hitMonster({ id: 'x', kind: 'alpha_wolf', x: 0, hp: 1, max: 70, dead: 0, cd: 0 }, 5);
@@ -455,13 +456,73 @@ check(MONSTERS.alpha_wolf.boss && MONSTERS.alpha_wolf.epFlat >= 5 && MONSTERS.al
 {
   const v2 = { v: 2, name: 'V2', xp: { attack: 5000 }, equip: { weapon: 'bronze_sword', head: null }, bag: [], stance: 'aggressive' };
   const m = migrate(v2);
-  check(m.v === 3 && m.ep === 20 && m.equipEnch && Array.isArray(m.bankGear) && m.visitedAreas.meadow && m.pity === 0 && 'boots' in m.equip && 'gloves' in m.equip, 'v2 -> v3 adds enchant fields and slots');
+  check(m.v === SAVE_VERSION && m.ep === 20 && m.equipEnch && Array.isArray(m.bankGear) && m.visitedAreas.lumby && m.pity === 0 && 'boots' in m.equip && 'gloves' in m.equip, 'v2 -> v3 adds enchant fields and slots');
   const m2 = migrate(JSON.parse(JSON.stringify(m)));
   check(m2.ep === 20, 'migration is idempotent (no second EP gift)');
   check(migrate({ v: 2, stance: 'weird' }).stance === 'accurate', 'unknown stance falls back');
   const g2 = new Game(migrate({ v: 2, name: 'x', equip: { weapon: 'bronze_sword' } }));
   check(g2.data.equip.weapon === 'bronze_sword' && g2.combat.type === 'slash' || g2.combat.type === 'stab', 'old saves load with a weapon style');
 }
+
+// --- regression: post-"Last Sync" audit (data integrity + ranged/magic/fletching wiring)
+{
+  const { SHOP_BUY, STATIONS, SPELLS, BONES, SLAYER_TASKS } = await import('../src/data.js');
+  const bad = [], need = (w, id) => { if (!ITEMS[id]) bad.push(`${w}:${id}`); };
+  for (const r of RECIPES) { need('recipe', r.out); for (const i in r.inputs) need('input', i); }
+  for (const [k, m] of Object.entries(MONSTERS)) for (const d of m.drops) need('drop ' + k, d.id);
+  for (const n of Object.values(NODES)) for (const y of nodeYields(n)) need('node', y.item);
+  for (const id of SHOP_BUY) need('shop', id);
+  for (const sp of SPELLS) for (const r in sp.runes) need('spell', r);
+  for (const b in BONES) need('bones', b);
+  check(!bad.length, `every referenced item exists ${bad.join(' ')}`);
+  const placed = new Set(Object.values(AREAS).flatMap((a) => a.entities.map((e) => e[1])));
+  check(Object.values(AREAS).every((a) => a.entities.every(([t, k]) => (t === 'monster' ? MONSTERS[k] : t === 'node' ? NODES[k] : t === 'station' ? STATIONS[k] : AREAS[k]))), 'area entities reference real monsters/nodes/stations/areas');
+  check(Object.keys(MONSTERS).every((k) => placed.has(k)) && Object.keys(NODES).every((k) => placed.has(k)), 'every monster and node is placed in some area');
+  check(SLAYER_TASKS.every((t) => t.monsters.some((k) => placed.has(k))), 'every slayer task is doable');
+  const seen = new Set(['lumby']), q = ['lumby']; while (q.length) for (const [t, k] of AREAS[q.pop()].entities) if (t === 'sign' && !seen.has(k)) { seen.add(k); q.push(k); }
+  check(seen.size === AREA_IDS.length, 'every area reachable by signs');
+  check(new Set(RECIPES.map((r) => r.id)).size === RECIPES.length, 'no duplicate recipe ids');
+  check(Object.values(ITEMS).every((it) => it.name && (!it.slot || it.req)), 'items have names; gear has requirements');
+  check(Object.values(ITEMS).filter((it) => it.slot).every((it) => it.bonus && Number.isFinite(gearBonuses({ [it.slot]: it.id }).def)), 'all gear has bonuses (no NaN)');
+  // ranged
+  const r = mk(31); r.data.equip.weapon = 'shortbow'; r.data.xp.ranged = xpForLevel(20);
+  let hc = r.combat; check(hc.type === 'ranged' && hc.maxHit === 0, 'bow without arrows has no damage');
+  r.addItem('iron_arrows', 30); hc = r.combat;
+  check(hc.maxHit > 0 && hc.ammo === 'iron_arrows' && hc.reach > 100 && Number.isFinite(hc.atkRoll), 'bow uses Ranged level + arrows');
+  r.select(r.ents.find((e) => e.kind === 'chicken').id); const rx0 = r.data.xp.ranged;
+  for (let i = 0; i < 400; i++) r.update(0.05);
+  check(r.count('iron_arrows') < 30 && r.data.xp.ranged > rx0 && r.data.xp.attack === 0, 'ranged consumes arrows and trains Ranged');
+  r.setStance('defensive'); check(stanceXpOf(r).map((x) => x[0]).join() === 'ranged,defence', 'longrange trains Ranged + Defence');
+  // magic
+  const w = mk(32); w.data.equip.weapon = 'staff'; w.select(w.ents.find((e) => e.kind === 'chicken').id);
+  for (let i = 0; i < 400; i++) w.update(0.05); check(w.target === null, 'staff without runes stops');
+  w.addItem('air_rune', 50); w.addItem('mind_rune', 50); check(w.combat.spell?.id === 'wind_strike' && w.combat.maxHit >= 2, 'staff casts best spell');
+  w.select(w.ents.find((e) => e.kind === 'chicken').id); for (let i = 0; i < 400; i++) w.update(0.05);
+  check(w.count('air_rune') < 50 && w.data.xp.magic > 0, 'magic spends runes and trains Magic');
+  w.data.equip.weapon = 'air_staff'; const a0 = w.count('air_rune'), m0 = w.count('mind_rune'); w.castSpell('wind_strike');
+  check(w.count('air_rune') === a0 && w.count('mind_rune') === m0 - 1, 'staff of air supplies air runes');
+  // fletching outputs
+  const f = mk(33); f.addItem('logs', 2); f.addItem('feather', 15);
+  check(f.craft('arrow_shaft').done === 1 && f.count('arrow_shaft') === 15, 'arrow shafts make 15 per log');
+  check(f.craft('headless_arrow', 15).done === 15 && f.count('headless_arrow') === 15, 'headless arrows recipe exists');
+  f.addItem('bronze_arrowtips', 15); check(f.craft('bronze_arrows').done === 1 && f.count('bronze_arrows') === 15, '15 tips + 15 headless -> 15 arrows');
+  f.addItem('rune_essence', 3); check(f.craft('rc_air_rune').done === 1 && f.count('air_rune') === 1, 'runecrafting recipe');
+  // crafting / tanner / gems
+  const c = mk(34); c.data.coins = 10; c.addItem('cowhide', 1); c.tanHide('soft'); c.data.xp.crafting = xpForLevel(14);
+  check(c.craft('leather_body').done === 1 && c.craftLeatherArmor('leather_body') === false, 'leather body crafts from soft leather');
+  check(MONSTERS.cow.drops.some((d) => d.id === 'cowhide'), 'cows drop cowhide');
+  c.data.bag.push({ id: 'bronze_sword', n: 1, e: { r: 1, rolls: 1, mods: [{ k: 'acc', v: 5 }] } });
+  check(c.extractGem({ where: 'bag', idx: c.data.bag.length - 1 }, 0) && c.data.bag.some((s) => s.gem), 'extract gem works (modText imported)');
+  c.data.stats.kills = 1; c.checkAchievements(); check(c.data.achievements.first_kill, 'achievements tracked');
+  check(new Game(newData('n')).energy === 100, 'energy initialised');
+  // migration of old area ids
+  for (const [old, now] of [['meadow', 'lumby'], ['quarry', 'draynor'], ['peaks', 'alkharid']]) {
+    const m = migrate({ v: 3, name: 'o', area: old, visitedAreas: { meadow: true, [old]: true }, activity: { area: old, target: `${old}:3`, kind: 'copper', type: 'node' } });
+    check(m.area === now && m.activity.area === now && m.visitedAreas[now] && !m.visitedAreas[old] && new Game(m).data.area === now, `v3 save in ${old} resumes in ${now}`);
+  }
+  for (const v of [1, 2, 3, 6]) { const m = migrate({ v, name: 'x', xp: { attack: 1000 } }); check(m.v === SAVE_VERSION && m.xp.ranged === 0 && m.prayerPoints >= 1 && m.energy === 100 && !!new Game(m), `v${v} fixture migrates`); }
+}
+function stanceXpOf(g) { return g.combat.style.xp.map((k) => [k]); }
 
 console.log(failed ? `\n${failed} of ${n} FAILED` : `\nall ${n} unit checks passed`);
 process.exit(failed ? 1 : 0);
