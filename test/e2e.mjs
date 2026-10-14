@@ -210,10 +210,10 @@ await G(() => { const g = window.__ib.game; g.travel('lumby'); g.addItem('logs',
 check(await G(() => !!document.querySelector('[data-recipe="arrow_shaft"]') && !!document.querySelector('[data-recipe="headless_arrow"]') && !!document.querySelector('[data-recipe="shortbow"]')), 'Fletching menu lists shafts, headless arrows and bows');
 await page.screenshot({ path: '/workspace/ib6-fletching.png' });
 check(await G(() => { const g = window.__ib.game; g.craft('arrow_shaft'); g.craft('headless_arrow', 15); g.craft('bronze_arrows'); return g.count('bronze_arrows') === 15; }), 'fletch 15 bronze arrows from log + feathers + tips');
-await G(() => { const g = window.__ib.game; window.__ib.ui.close(); g.equip('shortbow'); g.setStance('accurate'); }); await sleep(250);
+await G(() => { const g = window.__ib.game; window.__ib.ui.close(); g.equip('shortbow'); g.equip('bronze_arrows'); g.setStance('accurate'); }); await sleep(250);
 check(await G(() => /Accurate/.test(document.getElementById('stanceRow').textContent) && /Rapid/.test(document.getElementById('stanceRow').textContent) && /Rng/.test(document.getElementById('stanceRow').textContent)), 'stance row shows Accurate/Rapid/Longrange for bows');
 await G(() => { const g = window.__ib.game, c = g.ents.find((e) => e.kind === 'chicken'); g.hero.x = c.x - 120; g.data.xp.ranged = window.__ib.xpForLevel(10); g.select(c.id); }); await sleep(5000);
-check(await G(() => window.__ib.game.count('bronze_arrows') < 15 && window.__ib.game.data.xp.ranged > window.__ib.xpForLevel(10)), 'bow fires arrows and trains Ranged');
+check(await G(() => window.__ib.game.data.ammoN < 15 && window.__ib.game.data.xp.ranged > window.__ib.xpForLevel(10)), 'bow fires arrows and trains Ranged');
 await page.screenshot({ path: '/workspace/ib6-ranged.png' });
 await G(() => { const g = window.__ib.game; g.clearTarget(); g.equip('staff'); g.addItem('air_rune', 30); g.addItem('mind_rune', 30); g.setStance('accurate'); const c = g.ents.find((e) => e.kind === 'chicken' && e.dead <= 0) || g.ents.find((e) => e.kind === 'cow'); g.select(c.id); }); await sleep(3000);
 check(await G(() => window.__ib.game.count('mind_rune') < 30 && window.__ib.game.data.xp.magic > 0), 'staff casts Wind Strike with runes and trains Magic');
