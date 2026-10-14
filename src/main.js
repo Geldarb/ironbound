@@ -37,7 +37,7 @@ function start(data) {
   ui = new UI(game, resetCharacter); ui.onSheet = (o) => { scene.sheetOpen = o; };
   game.on((t, p) => { scene.onEvent(t, p); if (t === 'level' || t === 'die' || t === 'area') persist(); });
   coop?.leaveQuiet?.(); coop = new Coop(game); scene.coop = coop;
-  if (coopUI) { coopUI.btn.remove(); coopUI.ticker.remove(); }
+  if (coopUI) { coopUI.ticker.remove(); coopUI.badge.remove(); }
   coopUI = new CoopUI(coop, ui);
   coop.on((t, p) => { if (t === 'peerswing' && (p.p.at === 'ranged' || p.p.at === 'magic') && p.p.tx != null) scene.shoot(p.p.x + 14 * (p.p.d || 1), 244, p.p.tx, 266, p.p.at === 'ranged' ? 'arrow' : 'wind', 1); });
   window.__ib = { game, scene, ui, catchUp, xpForLevel, AREAS, coop, coopUI };

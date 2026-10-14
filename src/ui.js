@@ -23,6 +23,7 @@ export class UI {
     this.buildNav(); this.buildStance();
     $('sheetClose').onclick = () => this.close();
     $('btnMenu').onclick = () => this.open('settings');
+    setHudSize(getHudSize());
     $('hudFood').onclick = () => { if (!game.eatBest()) this.toast(game.foodCount ? 'Hitpoints already full' : 'No food in your bag'); };
     $('modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal') this.closeModal(); });
     game.on((t, p) => this.onEvent(t, p));
@@ -459,6 +460,19 @@ export class UI {
     const aer = el('div', 'row', `<div class="tx"><b>Auto-eat</b><small>Eats the best food when HP is at or below the threshold. With food, the hero never retreats.</small><div class="seg" style="margin:6px 0 0">${[['off', 0], ['30%', 30], ['50%', 50], ['70%', 70]].map(([l, v]) => `<button data-ae="${v}" class="${(v === 0 ? !ae.on : ae.on && ae.pct === v) ? 'on' : ''}">${l}</button>`).join('')}</div></div>`);
     aer.querySelectorAll('[data-ae]').forEach((x) => { x.onclick = () => { const v = Number(x.dataset.ae); if (v === 0) g.setAutoEat(false); else g.setAutoEat(true, v); this.renderSheet(); }; });
     b.appendChild(aer);
+    const cu = window.__ib?.coopUI;
+    if (cu) { const cr = el('div', 'row', `<div class="tx"><b>👥 Co-op</b><small id="coopSum">${esc(cu.summary())}</small></div><button class="btn gold" id="coopOpen">${cu.c.room ? 'Room' : 'Open'}${cu.unread ? ' 💬' : ''}</button>`); cr.querySelector('#coopOpen').onclick = () => cu.openRoom(); b.appendChild(cr); }
+    const sc0 = window.__ib?.scene;
+    if (sc0) {
+      const cam = el('div', 'row', `<div class="tx"><b>Camera</b><small id="camT"></small></div><div class="camPad"><button class="btn sm" data-cam="0,-1" aria-label="Camera up">▲</button><button class="btn sm" data-cam="-1,0" aria-label="Camera left">◀</button><button class="btn sm" data-cam="reset" aria-label="Reset camera">⟲</button><button class="btn sm" data-cam="1,0" aria-label="Camera right">▶</button><button class="btn sm" data-cam="0,1" aria-label="Camera down">▼</button></div>`);
+      const camT = () => { const n = sc0.nudge; cam.querySelector('#camT').textContent = n.x || n.y ? `Offset ${n.x > 0 ? '→' : n.x < 0 ? '←' : ''}${Math.abs(n.x) || ''} ${n.y < 0 ? '↑' : n.y > 0 ? '↓' : ''}${Math.abs(n.y) || ''}`.trim() : 'Centered on your hero'; };
+      cam.querySelectorAll('[data-cam]').forEach((x) => { x.onclick = () => { if (x.dataset.cam === 'reset') sc0.setNudge(0, 0); else { const [dx, dy] = x.dataset.cam.split(',').map(Number); sc0.setNudge(sc0.nudge.x + dx * 20, sc0.nudge.y + dy * 12); } camT(); }; });
+      camT(); b.appendChild(cam);
+    }
+    const hudS = getHudSize();
+    const hr = el('div', 'row', `<div class="tx"><b>Top bar size</b><small>Scale of the HP / coins bar</small></div><div class="seg">${['small', 'medium', 'large'].map((k) => `<button class="${hudS === k ? 'on' : ''}" data-hud="${k}">${k[0].toUpperCase()}</button>`).join('')}</div>`);
+    hr.querySelectorAll('[data-hud]').forEach((x) => { x.onclick = () => { setHudSize(x.dataset.hud); this.renderSheet(true); }; });
+    b.appendChild(hr);
     const fs = el('div', 'row', `<div class="tx"><b>Fullscreen</b></div><button class="btn" id="fsBtn">Toggle</button>`);
     fs.querySelector('#fsBtn').onclick = () => { const d = document.documentElement; if (document.fullscreenElement) document.exitFullscreen?.(); else d.requestFullscreen?.().catch(() => {}); };
     b.appendChild(fs);
@@ -497,3 +511,7 @@ function compareText(it, cur) {
   return parts.join(' · ') || 'same stats';
 }
 function bonusText(it) { return statLine(it); }
+
+const HUD_KEY = 'ironbound-hud', HUD_SCALE = { small: 0.82, medium: 1, large: 1.16 };
+export function getHudSize() { try { const v = localStorage.getItem(HUD_KEY); return HUD_SCALE[v] ? v : 'medium'; } catch { return 'medium'; } }
+export function setHudSize(k) { if (!HUD_SCALE[k]) k = 'medium'; try { localStorage.setItem(HUD_KEY, k); } catch { /* ignore */ } document.documentElement.style.setProperty('--hudS', String(HUD_SCALE[k])); document.documentElement.dataset.hud = k; }

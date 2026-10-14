@@ -23,14 +23,15 @@ const A = await player('Alice', 2), B = await player('Bob', 4);
 const G = (p, fn, ...a) => p.evaluate(fn, ...a);
 const until = async (p, fn, ms = 15000, arg) => { const t = Date.now(); while (Date.now() - t < ms) { if (await G(p, fn, arg)) return true; await sleep(150); } return false; };
 
-const lay = await G(A, () => { const b = document.getElementById('coopBtn').getBoundingClientRect(), s = document.getElementById('stage').getBoundingClientRect(); return { inStage: b.bottom <= s.bottom && b.right <= s.right, size: b.width }; });
-check(lay.inStage && lay.size <= 44, 'compact co-op button sits in the scene corner');
-await A.click('#coopBtn'); await A.click('#coopCreate');
+const openCoop = async (p) => { await G(p, () => window.__ib.coopUI.close()); await p.click('#btnMenu'); await sleep(250); await p.evaluate(() => document.getElementById('coopOpen').scrollIntoView({ block: 'center' })); await p.click('#coopOpen'); await sleep(150); };
+check(await G(A, () => !document.getElementById('coopBtn') && !document.querySelector('#stage > button.coopBtn')), 'no co-op button on the scene (moved to Settings)');
+await openCoop(A); await A.click('#coopCreate');
 check(await until(A, () => !!window.__ib.coop.room?.code && !!document.getElementById('coopRoomCode')), 'A creates a room and sees the code');
 const code = await G(A, () => window.__ib.coop.room.code);
-await B.click('#coopBtn'); await B.type('#coopCode', code.toLowerCase()); await B.click('#coopJoin');
+await openCoop(B); await B.type('#coopCode', code.toLowerCase()); await B.click('#coopJoin');
 check(await until(B, () => window.__ib.coop.active && window.__ib.coop.members.length === 2), `B joins room ${code}`);
-await G(A, () => window.__ib.coopUI.close()); await G(B, () => window.__ib.coopUI.close());
+await G(A, () => { window.__ib.coopUI.close(); window.__ib.ui.close?.(); }); await G(B, () => { window.__ib.coopUI.close(); window.__ib.ui.close?.(); });
+check(await G(A, () => document.getElementById('btnMenu').classList.contains('on')), 'settings button shows the connected ring');
 // meet at a goblin in Lumbridge
 const place = (p, off) => G(p, (off) => { const g = window.__ib.game; const e = g.ents.find((x) => x.kind === 'goblin'); g.hero.x = e.x + off; g.hero.dest = null; g.select(e.id); }, off);
 await place(A, -60); await place(B, -100);
@@ -44,7 +45,7 @@ const hpSync = await G(A, async () => { const g = window.__ib.game; const e = g.
 await G(B, () => window.__ib.game.clearTarget());
 check(await until(B, (id) => { const e = window.__ib.game.ent(id); return e && e.hp === e.max - 1; }, 5000, hpSync), 'monster HP is shared between screens');
 // room sheet + chat
-await A.click('#coopBtn'); await sleep(200); await A.type('#coopMsg', 'Want to trade?'); await A.click('#coopSend');
+await openCoop(A); await A.type('#coopMsg', 'Want to trade?'); await A.click('#coopSend');
 check(await until(B, () => window.__ib.coop.chat.some((c) => c.x === 'Want to trade?')), 'chat from the room sheet arrives');
 await A.screenshot({ path: `${OUT}/ib8-room.png` });
 // trade
@@ -67,7 +68,7 @@ check(after.a.logs === before.a.logs - 6 && after.b.logs === before.b.logs + 6 &
 await B.reload({ waitUntil: 'load' });
 check(await until(B, () => window.__ib?.coop?.active && window.__ib.coop.room.code !== undefined, 15000) && await until(A, () => window.__ib.coop.members.every((m) => !m.away)), 'B reloads and rejoins the same room');
 check(await until(A, () => window.__ib.coop.peersHere().some((p) => p.n === 'Bob'), 8000), 'B visible again after reconnect');
-await A.click('#coopBtn'); await sleep(200); await A.click('#coopLeave');
+await openCoop(A); await A.click('#coopLeave');
 check(await until(B, () => window.__ib.coop.members.length === 1), 'leaving updates the roster');
 check(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
 await browser.close(); srv?.kill();

@@ -11,10 +11,9 @@ export class CoopUI {
   constructor(coop, ui) {
     this.c = coop; this.ui = ui; this.view = null;
     const stage = $('stage');
-    this.btn = el('button', 'coopBtn', '👥'); this.btn.id = 'coopBtn'; this.btn.setAttribute('aria-label', 'Co-op'); stage.appendChild(this.btn);
-    this.badge = el('span', 'coopBadge'); this.btn.appendChild(this.badge);
+    // co-op lives in Settings; the settings button carries a subtle connected ring + unread dot
+    this.btn = $('btnMenu'); this.badge = this.btn.querySelector('.coopBadge') || el('span', 'coopBadge'); this.btn.appendChild(this.badge);
     this.ticker = el('div', 'coopTicker'); this.ticker.id = 'coopTicker'; stage.appendChild(this.ticker);
-    this.btn.onclick = () => this.openRoom();
     coop.on((t, p) => {
       if (t === 'chat') { this.renderTicker(); if (this.view === 'room') this.renderChat(); if (this.view !== 'room' && !p.me && !p.sys) this.unread = (this.unread || 0) + 1; this.renderBadge(); }
       else if (t === 'room' || t === 'status') { this.renderBadge(); if (this.view === 'room') this.openRoom(); }
@@ -27,7 +26,7 @@ export class CoopUI {
   renderBadge() {
     const c = this.c, n = c.room ? c.members.length : 0;
     this.btn.classList.toggle('on', !!c.room && c.status === 'online'); this.btn.classList.toggle('warn', !!c.room && c.status !== 'online');
-    this.badge.textContent = this.unread ? '💬' : n > 1 ? String(n) : ''; this.badge.hidden = !this.badge.textContent;
+    this.badge.hidden = !this.unread; this.btn.title = c.room ? `Settings · co-op room ${c.room.code} (${n} player${n === 1 ? '' : 's'})` : 'Settings';
   }
   renderTicker() {
     const lines = this.c.room ? this.c.chat.filter((m) => Date.now() - m.ts < 12000).slice(-2) : [];
@@ -35,6 +34,8 @@ export class CoopUI {
     clearTimeout(this.tT); if (lines.length) this.tT = setTimeout(() => this.renderTicker(), 12500);
   }
   close() { this.view = null; this.ui.closeModal(); }
+  /** one-line status for the Settings row */
+  summary() { const c = this.c; return c.room ? `Room ${c.room.code} · ${c.members.length} player${c.members.length === 1 ? '' : 's'}${c.status !== 'online' ? ' · reconnecting' : ''}` : 'Play with friends using a room code'; }
 
   openRoom() {
     const c = this.c; if (c.trade?.open) return this.openTrade(); this.view = 'room'; this.unread = 0; this.renderBadge();

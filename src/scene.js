@@ -9,7 +9,8 @@ export const MON_H = MON_HEIGHT;
 /** Camera tuning. ZOOM scales the whole world (1 = old close-up view; <1 shows more of the area). GROUND_FRAC = how far down the scene the walk line sits. */
 export const ZOOM = 0.7, ZOOM_MIN = 0.45, ZOOM_MAX = 1.1;
 export const GROUND_FRAC = 0.62, GROUND_FRAC_SHEET = 0.36;
-const ZKEY = 'ironbound-zoom';
+const ZKEY = 'ironbound-zoom', CKEY = 'ironbound-cam';
+const clampN = (v, m) => Math.max(-m, Math.min(m, Math.round(v)));
 export class Scene {
   constructor(canvas, game, lookIdx = 0) {
     this.cv = canvas; this.ctx = canvas.getContext('2d'); this.g = game; this.t = 0;
@@ -17,9 +18,12 @@ export class Scene {
     this.look = lookIdx;
     let z = ZOOM; try { const v = parseFloat(localStorage.getItem(ZKEY)); if (v >= ZOOM_MIN && v <= ZOOM_MAX) z = v; } catch { /* ignore */ }
     this.zoom = z;
+    this.nudge = { x: 0, y: 0 }; try { const n = JSON.parse(localStorage.getItem(CKEY) || 'null'); if (n && Number.isFinite(n.x) && Number.isFinite(n.y)) this.nudge = { x: clampN(n.x, 80), y: clampN(n.y, 48) }; } catch { /* ignore */ }
     canvas.addEventListener('pointerup', (e) => this.tap(e));
     this.resize();
   }
+  /** small persisted camera offset (world units): x = left/right, y = up(-)/down(+) */
+  setNudge(x, y) { this.nudge = { x: clampN(x, 80), y: clampN(y, 48) }; try { localStorage.setItem(CKEY, JSON.stringify(this.nudge)); } catch { /* ignore */ } this.setOff(); return this.nudge; }
   setZoom(z) { this.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100)); try { localStorage.setItem(ZKEY, String(this.zoom)); } catch { /* ignore */ } this.resize(); return this.zoom; }
   resize() {
     const r = this.cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -30,8 +34,8 @@ export class Scene {
     this.gf = this.gf ?? GROUND_FRAC; this.setOff();
   }
   /** world y shift so the ground sits at fraction gf of the scene (raised while a bottom sheet is open in portrait) */
-  setOff() { this.offY = (this.cssH * this.gf) / this.kc - GROUND; }
-  camera() { const w = AREAS[this.g.data.area].width; return Math.max(0, Math.min(w - this.viewW, this.g.hero.x - this.viewW / 2)); }
+  setOff() { this.offY = (this.cssH * this.gf) / this.kc - GROUND - (this.nudge?.y || 0); }
+  camera() { const w = AREAS[this.g.data.area].width; return Math.max(0, Math.min(w - this.viewW, this.g.hero.x - this.viewW / 2 + (this.nudge?.x || 0))); }
   tap(e) {
     const r = this.cv.getBoundingClientRect();
     const px = e.clientX - r.left, py = e.clientY - r.top;

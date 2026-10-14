@@ -548,5 +548,62 @@ function stanceXpOf(g) { return g.combat.style.xp.map((k) => [k]); }
   }
 }
 
+// ---- ammo slot, OSRS bows/arrows, standard spellbook ----
+{
+  const D = await import('../src/data.js');
+  const { ARROW_TIERS, BOW_WOODS, RUNES, SPELL_BY_ID, SPELLS, UNDEAD } = D;
+  check(D.SLOTS.some((s) => s.id === 'ammo') && D.ARROW_IDS.every((id) => ITEMS[id].slot === 'ammo' && ITEMS[id].stack), 'ammo slot + stackable arrows');
+  const a = mk(51); a.data.xp.ranged = xpForLevel(40); a.addItem('yew_shortbow', 1); a.equip('yew_shortbow'); a.addItem('rune_arrows', 40); a.addItem('iron_arrows', 10);
+  check(a.combat.ammo === null && a.ammoProblem, 'arrows in the bag are not used');
+  a.equip('rune_arrows'); check(a.data.equip.ammo === 'rune_arrows' && a.data.ammoN === 40 && a.count('rune_arrows') === 0 && a.combat.ammo === 'rune_arrows', 'equipping arrows moves the whole stack to the quiver');
+  a.addItem('rune_arrows', 5); a.equip('rune_arrows'); check(a.data.ammoN === 45, 'equipping more of the same tops up');
+  a.equip('iron_arrows'); check(a.data.equip.ammo === 'iron_arrows' && a.count('rune_arrows') === 45 && a.data.ammoN === 10, 'swapping arrows returns the old stack');
+  a.select(a.ents.find((e) => e.kind === 'chicken').id); for (let i = 0; i < 200; i++) a.update(0.05); check(a.data.ammoN < 10, 'bow fires from the ammo slot');
+  a.unequip('ammo'); check(!a.data.equip.ammo && a.data.ammoN === 0 && a.count('iron_arrows') > 0, 'unequip ammo returns arrows to the bag');
+  a.data.equip.weapon = 'shortbow'; a.equip('rune_arrows'); check(a.combat.ammo === null && /can't fire/.test(a.ammoProblem), 'normal shortbow cannot fire rune arrows (OSRS arrow tiers)');
+  const m = migrate({ v: 7, name: 'old', bag: [{ id: 'iron_arrows', n: 20 }, { id: 'bronze_arrows', n: 50 }, { id: 'logs', n: 2 }] });
+  check(m.equip.ammo === 'iron_arrows' && m.ammoN === 20 && m.bag.some((s) => s.id === 'bronze_arrows') && !m.bag.some((s) => s.id === 'iron_arrows'), 'v7 save: best arrows auto-quivered');
+  check(migrate({ v: 8, name: 'x', equip: { ammo: 'iron_arrows' }, ammoN: 0 }).equip.ammo === null, 'empty quiver cleared on load');
+  // offline uses quivered arrows only
+  const o = mk(52); o.data.xp.ranged = xpForLevel(30); o.addItem('oak_shortbow', 1); o.equip('oak_shortbow'); o.addItem('iron_arrows', 30); o.equip('iron_arrows'); o.addItem('bronze_arrows', 100);
+  o.select(o.ents.find((e) => e.kind === 'chicken').id); o.data.activity = { type: 'monster', kind: 'chicken', area: o.data.area, target: o.target }; o.resumeActivity?.();
+  const rep = simulateOffline(o, 3600); check(o.data.ammoN < 30 && o.count('bronze_arrows') === 100 && (rep.spent?.iron_arrows || 0) > 0, 'offline ranged spends quivered arrows, not bag arrows');
+  // bows + fletching
+  const ex = { logs: [1, 8], oak_logs: [5, 14], willow_logs: [20, 20], maple_logs: [30, 29], yew_logs: [40, 47], magic_logs: [50, 69] };
+  for (const [logs, pre] of BOW_WOODS.map((b) => [b[0], b[1]])) for (const k of ['shortbow', 'longbow']) {
+    const id = pre + k, it = ITEMS[id];
+    check(it && it.req.level === ex[logs][0] && it.bonus.rng === ex[logs][1] && RECIPE_BY_ID[id + '_u']?.inputs[logs] === 1 && RECIPE_BY_ID[id]?.inputs.bow_string === 1, `${id}: OSRS req/stats + unstrung + stringing recipes`);
+  }
+  check(RECIPE_BY_ID.magic_longbow_u.level === 85 && RECIPE_BY_ID.yew_shortbow_u.level === 65 && RECIPE_BY_ID.maple_longbow.xp === 58.3, 'OSRS fletching levels/xp');
+  for (const t of ARROW_TIERS) check(ITEMS[`${t.id}_arrows`] && RECIPE_BY_ID[`${t.id}_arrowtips`]?.station === 'anvil' && RECIPE_BY_ID[`${t.id}_arrows`]?.n === 15, `${t.id} arrows: smith tips + fletch 15`);
+  check(ITEMS.rune_arrows.ammo === 49 && ITEMS.adamant_arrows.ammo === 31 && RECIPE_BY_ID.rune_arrows.level === 75, 'OSRS arrow strength / fletching level');
+  const f = mk(53); f.data.xp.fletching = xpForLevel(70); f.addItem('yew_logs', 1); f.addItem('bow_string', 1);
+  check(f.craft('yew_longbow_u').done === 1 && f.craft('yew_longbow').done === 1 && f.count('yew_longbow') === 1, 'logs -> unstrung -> strung longbow');
+  f.data.xp.crafting = xpForLevel(10); f.addItem('flax', 2); check(f.craft('bow_string').done === 1, 'spin flax into bow string');
+  check(['maple', 'yew', 'magic_tree', 'flax'].every((k) => NODES[k] && Object.values(AREAS).some((ar) => ar.entities.some((e) => e[1] === k))), 'new trees + flax placed');
+  const fl = mk(54); fl.travel('port_sarim'); const fn = fl.ents.find((e) => e.kind === 'flax'); fl.select(fn.id); for (let i = 0; i < 200 && !fl.count('flax'); i++) fl.update(0.05); check(fl.count('flax') > 0, 'flax can be picked without a tool');
+  // spellbook
+  check(RUNES.length === 15 && ['air', 'water', 'earth', 'fire', 'mind', 'body', 'cosmic', 'chaos', 'nature', 'law', 'death', 'blood', 'soul', 'astral', 'wrath'].every((r) => ITEMS[`${r}_rune`]?.rune && RECIPE_BY_ID[`rc_${r}_rune`]), '15 OSRS runes, all runecraftable');
+  const osrs = { wind_strike: [1, 2], water_strike: [5, 4], earth_strike: [9, 6], fire_strike: [13, 8], wind_bolt: [17, 9], water_bolt: [23, 10], earth_bolt: [29, 11], fire_bolt: [35, 12], wind_blast: [41, 13], water_blast: [47, 14], earth_blast: [53, 15], fire_blast: [59, 16], wind_wave: [62, 17], water_wave: [65, 18], earth_wave: [70, 19], fire_wave: [75, 20], wind_surge: [81, 21], water_surge: [85, 22], earth_surge: [90, 23], fire_surge: [95, 24], crumble_undead: [39, 15] };
+  for (const [id, [lv, mh]] of Object.entries(osrs)) check(SPELL_BY_ID[id]?.level === lv && SPELL_BY_ID[id].maxHit === mh, `${id}: level ${lv}, max hit ${mh}`);
+  check(JSON.stringify(SPELL_BY_ID.fire_blast.runes) === JSON.stringify({ fire_rune: 5, air_rune: 4, death_rune: 1 }) && SPELL_BY_ID.wind_surge.runes.wrath_rune === 1 && SPELL_BY_ID.water_wave.runes.blood_rune === 1, 'OSRS rune costs');
+  check(['confuse', 'weaken', 'curse', 'bind', 'snare', 'entangle', 'low_alch', 'high_alch', 'varrock_tele', 'lumbridge_tele', 'falador_tele'].every((id) => SPELL_BY_ID[id]) && SPELLS.filter((s) => s.type === 'tele').every((s) => AREAS[s.area]), 'curses, binds, alchemy, teleports (mapped to areas)');
+  const w = mk(55); w.data.xp.magic = xpForLevel(99); w.addItem('fire_staff', 1); w.equip('fire_staff'); w.addItem('air_rune', 100); w.addItem('death_rune', 5);
+  check(w.combat.spell?.id === 'fire_blast' && w.combat.maxHit === 16, 'best castable combat spell, exact OSRS max hit');
+  const fr = w.count('fire_rune'); w.castSpell('fire_blast', w.ents.find((e) => e.kind === 'chicken')); check(w.count('death_rune') === 4 && fr === 0, 'Staff of fire supplies fire runes');
+  for (const st of ['water_staff', 'earth_staff', 'fire_staff', 'air_staff']) check(ITEMS[st]?.infinite === st.replace('_staff', '_rune'), `${st} supplies its rune`);
+  w.addItem('earth_rune', 10); w.addItem('chaos_rune', 2);
+  check(!w.castSpell('crumble_undead', w.ents.find((e) => e.kind === 'chicken')) && w.count('chaos_rune') === 2, 'Crumble Undead refuses non-undead');
+  check(UNDEAD.has('skeleton') && UNDEAD.has('zombie'), 'undead list');
+  w.addItem('nature_rune', 5); w.addItem('rune_scimitar', 1); const c0 = w.data.coins, si = w.data.bag.findIndex((s) => s.id === 'rune_scimitar');
+  check(w.castSpell('high_alch', { bagIdx: si }) && w.data.coins === c0 + Math.floor(ITEMS.rune_scimitar.value * 0.6) && !w.count('rune_scimitar'), 'High Level Alchemy: 60% value');
+  w.addItem('water_rune', 10); w.addItem('body_rune', 3); const gob = w.ents.find((e) => e.type === 'monster' && !e.dead);
+  check(w.castSpell('confuse', gob) && gob.curse.confuse && !w.castSpell('confuse', gob), 'Confuse applies once');
+  check(w.castSpell('bind', gob) && gob.hold === 5 && w.monsterAttack(MONSTERS[gob.kind], gob).held, 'Bind holds a melee monster');
+  w.addItem('law_rune', 2); check(w.castSpell('varrock_tele') && w.data.area === 'varrock', 'Varrock Teleport travels');
+  check(SHOP_BUY_OK(), 'shop sells bows, arrows, flax, bow string, staves, runes');
+  function SHOP_BUY_OK() { return ['longbow', 'bronze_arrows', 'flax', 'bow_string', 'fire_staff', 'law_rune'].every((id) => D.SHOP_BUY.includes(id)); }
+}
+
 console.log(failed ? `\n${failed} of ${n} FAILED` : `\nall ${n} unit checks passed`);
 process.exit(failed ? 1 : 0);
