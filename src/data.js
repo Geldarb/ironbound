@@ -66,14 +66,8 @@ export const SLAYER_TASKS = [
   { id: 'dragons', name: 'Green dragons', monsters: ['green_dragon'], amount: [3, 8], level: 40, xp: 120 },
 ];
 export const SLAYER_MASTER = { name: 'Turael', blurb: 'Assigns Slayer tasks. Complete them for bonus XP and coins.' };
-export const SPELLS = [
-  { id: 'wind_strike', name: 'Wind Strike', level: 1, runes: { air_rune: 1, mind_rune: 1 }, maxHit: 2, xp: 5.5, blurb: 'Basic air spell' },
-  { id: 'water_strike', name: 'Water Strike', level: 5, runes: { water_rune: 1, air_rune: 1, mind_rune: 1 }, maxHit: 4, xp: 7.5, blurb: 'Water spell' },
-  { id: 'earth_strike', name: 'Earth Strike', level: 9, runes: { earth_rune: 2, air_rune: 1, mind_rune: 1 }, maxHit: 6, xp: 9.5, blurb: 'Earth spell' },
-  { id: 'fire_strike', name: 'Fire Strike', level: 13, runes: { fire_rune: 3, air_rune: 2, mind_rune: 1 }, maxHit: 8, xp: 11.5, blurb: 'Fire spell' },
-  { id: 'wind_bolt', name: 'Wind Bolt', level: 17, runes: { air_rune: 2, chaos_rune: 1 }, maxHit: 9, xp: 13.5, blurb: 'Stronger air spell' },
-];
-export const SPELL_BY_ID = Object.fromEntries(SPELLS.map((s) => [s.id, s]));
+export const SPELLS = []; // filled in the OSRS standard spellbook block below
+export const SPELL_BY_ID = {};
 
 export const ACHIEVEMENTS = [
   { id: 'first_kill', name: 'First blood', desc: 'Kill any monster', reward: { coins: 50 }, check: (g) => g.data.stats.kills >= 1 },
@@ -109,7 +103,7 @@ export const TIER_IDX = Object.fromEntries(TIERS.map((t, i) => [t.id, i]));
 
 export const SLOTS = [
   { id: 'head', name: 'Head' }, { id: 'body', name: 'Body' }, { id: 'legs', name: 'Legs' },
-  { id: 'weapon', name: 'Weapon' }, { id: 'shield', name: 'Shield' }, { id: 'gloves', name: 'Gloves' }, { id: 'boots', name: 'Boots' },
+  { id: 'weapon', name: 'Weapon' }, { id: 'shield', name: 'Shield' }, { id: 'gloves', name: 'Gloves' }, { id: 'boots', name: 'Boots' }, { id: 'ammo', name: 'Ammo' },
 ];
 export const SLOT_IDS = SLOTS.map((s) => s.id);
 
@@ -139,15 +133,15 @@ export const WEAPON_KINDS = {
  *  effective-level bonus: `xp` = skills trained, `bonus` = +effective levels, `speed` = seconds off the interval. */
 const RS = (stance, name, type, xp, bonus = {}, extra = {}) => ({ stance, name, type, xp, bonus, ...extra });
 export const RANGED_KINDS = {
-  bow: { name: 'Bow', interval: 1.8, a: {}, str: 0, two: true, reach: 170, ranged: true, blurb: 'Ranged: fires arrows from your bag (Ranged skill)',
+  bow: { name: 'Bow', interval: 1.8, a: {}, str: 0, two: true, reach: 170, ranged: true, blurb: 'Ranged: fires the arrows in your ammo slot (Ranged skill)',
     styles: [RS('accurate', 'Accurate', 'ranged', ['ranged'], { ranged: 3 }), RS('aggressive', 'Rapid', 'ranged', ['ranged'], {}, { speed: 0.3 }), RS('defensive', 'Longrange', 'ranged', ['ranged', 'defence'], { defence: 3 })] },
-  staff: { name: 'Staff', interval: 2.4, a: {}, str: 0, two: true, reach: 150, magic: true, blurb: 'Magic: casts your autocast (or best) spell using runes',
+  staff: { name: 'Staff', interval: 2.4, a: {}, str: 0, two: true, reach: 150, magic: true, blurb: 'Magic: casts your autocast (or best) combat spell using runes',
     styles: [RS('accurate', 'Cast', 'magic', ['magic'], { magic: 3 }), RS('aggressive', 'Bash', 'crush', ['strength'], { strength: 3 }, { melee: true }), RS('defensive', 'Def. cast', 'magic', ['magic', 'defence'], { defence: 3 })] },
 };
 export const ALL_WEAPON_KINDS = { ...WEAPON_KINDS, ...RANGED_KINDS };
 /** XP split for an active weapon style (ranged/magic styles carry their own) */
 export const styleXp = (style) => (style?.xp ? style.xp.map((k) => [k, 1 / style.xp.length]) : stanceXp(style?.stance));
-export const ARROW_IDS = ['mithril_arrows', 'steel_arrows', 'iron_arrows', 'bronze_arrows'];
+export const ARROW_IDS = []; // best first; filled in the OSRS ranged block below
 export const UNARMED = { name: 'Unarmed', interval: 1.5, a: { stab: 0, slash: 0, crush: 0 }, str: 0, blurb: 'Fists', styles: [S('accurate', 'Punch', 'crush'), S('aggressive', 'Kick', 'crush'), S('defensive', 'Block', 'crush')] };
 export const ARMOUR_KINDS = {
   helm: { name: 'Med Helm', slot: 'head', bars: 1, lvl: 3, art: 'helm' },
@@ -183,22 +177,6 @@ add('oak_logs', { name: 'Oak logs', stack: true, value: 10, art: 'log', c: '#9a6
 add('willow_logs', { name: 'Willow logs', stack: true, value: 20, art: 'log', c: '#7a9a5a' });
 add('arrow_shaft', { name: 'Arrow shafts', stack: true, value: 1, art: 'arrow', c: '#c9a46a' });
 add('headless_arrow', { name: 'Headless arrows', stack: true, value: 2, art: 'arrow', c: '#e8d8c0' });
-// Bows
-add('shortbow', { name: 'Shortbow', stack: false, value: 50, art: 'bow', c: '#b9824a', slot: 'weapon', req: { skill: 'ranged', level: 1 }, interval: 1.8, wk: 'bow', two: true, bonus: { atk: 8, str: 0, def: 0, a: {}, rng: 8 } });
-add('oak_shortbow', { name: 'Oak shortbow', stack: false, value: 100, art: 'bow', c: '#9a6a3a', slot: 'weapon', req: { skill: 'ranged', level: 5 }, interval: 1.8, wk: 'bow', two: true, bonus: { atk: 14, str: 0, def: 0, a: {}, rng: 14 } });
-add('willow_shortbow', { name: 'Willow shortbow', stack: false, value: 200, art: 'bow', c: '#7a9a5a', slot: 'weapon', req: { skill: 'ranged', level: 20 }, interval: 1.8, wk: 'bow', two: true, bonus: { atk: 20, str: 0, def: 0, a: {}, rng: 20 } });
-add('longbow', { name: 'Longbow', stack: false, value: 80, art: 'bow', c: '#b9824a', slot: 'weapon', req: { skill: 'ranged', level: 5 }, interval: 2.4, wk: 'bow', two: true, bonus: { atk: 8, str: 0, def: 0, a: {}, rng: 8 } });
-add('oak_longbow', { name: 'Oak longbow', stack: false, value: 160, art: 'bow', c: '#9a6a3a', slot: 'weapon', req: { skill: 'ranged', level: 10 }, interval: 2.4, wk: 'bow', two: true, bonus: { atk: 14, str: 0, def: 0, a: {}, rng: 14 } });
-// Arrowheads (smithable)
-add('bronze_arrowtips', { name: 'Bronze arrowtips', stack: true, value: 1, art: 'arrow', c: '#d08f55' });
-add('iron_arrowtips', { name: 'Iron arrowtips', stack: true, value: 3, art: 'arrow', c: '#aab3bf' });
-add('steel_arrowtips', { name: 'Steel arrowtips', stack: true, value: 8, art: 'arrow', c: '#c9d6e3' });
-add('mithril_arrowtips', { name: 'Mithril arrowtips', stack: true, value: 20, art: 'arrow', c: '#6a8ee8' });
-// Arrows
-add('bronze_arrows', { name: 'Bronze arrows', stack: true, value: 2, art: 'arrow', c: '#d08f55', ammo: 7 });
-add('iron_arrows', { name: 'Iron arrows', stack: true, value: 5, art: 'arrow', c: '#aab3bf', ammo: 10 });
-add('steel_arrows', { name: 'Steel arrows', stack: true, value: 12, art: 'arrow', c: '#c9d6e3', ammo: 16 });
-add('mithril_arrows', { name: 'Mithril arrows', stack: true, value: 30, art: 'arrow', c: '#6a8ee8', ammo: 22 });
 // Magic staves/wands (fletched)
 add('staff', { name: 'Staff', stack: false, value: 15, art: 'staff', c: '#b9824a', slot: 'weapon', req: { skill: 'magic', level: 1 }, interval: 2.4, wk: 'staff', two: true, bonus: { atk: 4, str: 0, def: 0, a: {}, mag: 4 } });
 add('magic_staff', { name: 'Magic staff', stack: false, value: 200, art: 'staff', c: '#6a6ae8', slot: 'weapon', req: { skill: 'magic', level: 1 }, interval: 2.4, wk: 'staff', two: true, bonus: { atk: 10, str: 0, def: 0, a: {}, mag: 10 } });
@@ -211,7 +189,6 @@ add('leather_body', { name: 'Leather body', stack: false, value: 25, art: 'body'
 add('hardleather_body', { name: 'Hardleather body', stack: false, value: 60, art: 'body', c: '#b9824a', slot: 'body', req: { skill: 'ranged', level: 10 }, def: 18, bonus: { atk: 0, str: 0, def: 18, a: {} } });
 add('studded_body', { name: 'Studded body', stack: false, value: 150, art: 'body', c: '#9a6a3a', slot: 'body', req: { skill: 'ranged', level: 20 }, def: 28, bonus: { atk: 0, str: 0, def: 28, a: {} } });
 // Runes (Magic ammo, Runecrafting output) + essence
-for (const [id, name, c, v] of [['air_rune', 'Air rune', '#d8eef8', 4], ['mind_rune', 'Mind rune', '#e8a040', 3], ['water_rune', 'Water rune', '#3b8eea', 4], ['earth_rune', 'Earth rune', '#8a6a3a', 4], ['fire_rune', 'Fire rune', '#e8453c', 4], ['chaos_rune', 'Chaos rune', '#d8a020', 40], ['nature_rune', 'Nature rune', '#3fb950', 80], ['death_rune', 'Death rune', '#4a4a5a', 120]]) add(id, { name, stack: true, value: v, art: 'rune', c, rune: true });
 add('rune_essence', { name: 'Rune essence', stack: true, value: 2, art: 'ore', c: '#d8d0b8' });
 add('ashes', { name: 'Ashes', stack: true, value: 2, art: 'ore', c: '#8a8a8a' });
 add('steel_studs', { name: 'Steel studs', stack: true, value: 30, art: 'bar', c: '#c9d6e3' });
@@ -285,10 +262,6 @@ export const RECIPES = [
 for (const [id, o] of Object.entries({ steel_bar: [{ iron_ore: 1, coal: 2 }, 30, 17.5], mithril_bar: [{ mithril_ore: 1, coal: 4 }, 50, 30], adamant_bar: [{ adamant_ore: 1, coal: 6 }, 70, 37.5], rune_bar: [{ runite_ore: 1, coal: 8 }, 85, 50] })) RECIPES.push({ id, station: 'furnace', out: id, inputs: o[0], level: o[1], xp: o[2], chance: 1 });
 // Arrowtips
 RECIPES.push({ id: 'steel_studs', station: 'anvil', tier: 2, out: 'steel_studs', inputs: { steel_bar: 1 }, level: 36, xp: 37.5, chance: 1 });
-RECIPES.push({ id: 'bronze_arrowtips', station: 'anvil', tier: 0, out: 'bronze_arrowtips', inputs: { bronze_bar: 1 }, level: 5, xp: 12.5, chance: 1, n: 15 });
-RECIPES.push({ id: 'iron_arrowtips', station: 'anvil', tier: 1, out: 'iron_arrowtips', inputs: { iron_bar: 1 }, level: 20, xp: 25, chance: 1, n: 15 });
-RECIPES.push({ id: 'steel_arrowtips', station: 'anvil', tier: 2, out: 'steel_arrowtips', inputs: { steel_bar: 1 }, level: 35, xp: 37.5, chance: 1, n: 15 });
-RECIPES.push({ id: 'mithril_arrowtips', station: 'anvil', tier: 3, out: 'mithril_arrowtips', inputs: { mithril_bar: 1 }, level: 55, xp: 50, chance: 1, n: 15 });
 for (const [i] of TIERS.entries()) {
   for (const [kind, k] of Object.entries(SMITH_KINDS)) {
     RECIPES.push({ id: `${TIERS[i].id}_${kind}`, station: 'anvil', tier: i, out: `${TIERS[i].id}_${kind}`, inputs: { [TIER_BAR[i]]: k.bars }, level: Math.min(99, k.smithLevel + TIER_SMITH[i]), xp: k.bars * BAR_XP[i], chance: 1 });
@@ -299,19 +272,91 @@ for (const c of COOKABLE) RECIPES.push({ id: `cook_${c.out}`, station: 'cook', s
 // Fletching
 RECIPES.push({ id: 'arrow_shaft', station: 'fletch', skill: 'fletching', out: 'arrow_shaft', inputs: { logs: 1 }, level: 1, xp: 5, chance: 1, n: 15 });
 RECIPES.push({ id: 'headless_arrow', station: 'fletch', skill: 'fletching', out: 'headless_arrow', inputs: { arrow_shaft: 1, feather: 1 }, level: 1, xp: 1, chance: 1 });
-RECIPES.push({ id: 'shortbow', station: 'fletch', skill: 'fletching', out: 'shortbow', inputs: { logs: 1 }, level: 5, xp: 5, chance: 1 });
-RECIPES.push({ id: 'oak_shortbow', station: 'fletch', skill: 'fletching', out: 'oak_shortbow', inputs: { oak_logs: 1 }, level: 20, xp: 16.5, chance: 1 });
-RECIPES.push({ id: 'willow_shortbow', station: 'fletch', skill: 'fletching', out: 'willow_shortbow', inputs: { willow_logs: 1 }, level: 35, xp: 33.3, chance: 1 });
-RECIPES.push({ id: 'longbow', station: 'fletch', skill: 'fletching', out: 'longbow', inputs: { logs: 1 }, level: 10, xp: 10, chance: 1 });
-RECIPES.push({ id: 'bronze_arrows', station: 'fletch', skill: 'fletching', out: 'bronze_arrows', inputs: { headless_arrow: 15, bronze_arrowtips: 15 }, level: 1, xp: 39.5, chance: 1, n: 15 });
-RECIPES.push({ id: 'iron_arrows', station: 'fletch', skill: 'fletching', out: 'iron_arrows', inputs: { headless_arrow: 15, iron_arrowtips: 15 }, level: 15, xp: 57.5, chance: 1, n: 15 });
 RECIPES.push({ id: 'staff', station: 'fletch', skill: 'fletching', out: 'staff', inputs: { logs: 1 }, level: 1, xp: 12.5, chance: 1 });
 // Crafting
 RECIPES.push({ id: 'leather_body', station: 'craft', skill: 'crafting', out: 'leather_body', inputs: { soft_leather: 1 }, level: 14, xp: 25, chance: 1 });
 RECIPES.push({ id: 'hardleather_body', station: 'craft', skill: 'crafting', out: 'hardleather_body', inputs: { hard_leather: 1 }, level: 28, xp: 35, chance: 1 });
 RECIPES.push({ id: 'studded_body', station: 'craft', skill: 'crafting', out: 'studded_body', inputs: { hard_leather: 1, steel_studs: 1 }, level: 41, xp: 40, chance: 1 });
 // Runecrafting (no altar station yet: usable from the Craft tab like fletching/crafting)
-for (const [id, ess, lvl, xp] of [['air_rune', 1, 1, 5], ['mind_rune', 1, 2, 5.5], ['water_rune', 2, 5, 6], ['earth_rune', 2, 9, 6.5], ['fire_rune', 3, 14, 7], ['chaos_rune', 5, 35, 8.5]]) RECIPES.push({ id: `rc_${id}`, station: 'runecraft', skill: 'runecrafting', out: id, inputs: { rune_essence: ess }, level: lvl, xp, chance: 1 });
+
+// ======================= OSRS ranged: bows, arrows, fletching =======================
+add('bow_string', { name: 'Bow string', stack: true, value: 30, art: 'arrow', c: '#f3ead2' });
+add('flax', { name: 'Flax', stack: true, value: 5, art: 'herb', c: '#8ab0e8' });
+for (const [id, name, v] of [['maple_logs', 'Maple logs', 35], ['yew_logs', 'Yew logs', 80], ['magic_logs', 'Magic logs', 300]]) add(id, { name, stack: true, value: v, art: 'log', c: { maple_logs: '#c9803a', yew_logs: '#6a4a2a', magic_logs: '#4a7ac8' }[id] });
+/** arrow tiers in order; a bow fires arrows up to its `maxArrow` tier (OSRS: e.g. yew bows fire rune arrows, normal bows only bronze/iron) */
+export const ARROW_TIERS = [
+  { id: 'bronze', name: 'Bronze', str: 7, fl: 1, xp: 1.3, tipLv: 5, tipXp: 12.5, bar: 'bronze_bar', v: 2, c: '#d08f55' },
+  { id: 'iron', name: 'Iron', str: 10, fl: 15, xp: 2.5, tipLv: 20, tipXp: 25, bar: 'iron_bar', v: 5, c: '#aab3bf' },
+  { id: 'steel', name: 'Steel', str: 16, fl: 30, xp: 5, tipLv: 35, tipXp: 37.5, bar: 'steel_bar', v: 12, c: '#c9d6e3' },
+  { id: 'mithril', name: 'Mithril', str: 22, fl: 45, xp: 7.5, tipLv: 55, tipXp: 50, bar: 'mithril_bar', v: 30, c: '#6a8ee8' },
+  { id: 'adamant', name: 'Adamant', str: 31, fl: 60, xp: 10, tipLv: 75, tipXp: 62.5, bar: 'adamant_bar', v: 80, c: '#4cbf6b' },
+  { id: 'rune', name: 'Rune', str: 49, fl: 75, xp: 12.5, tipLv: 90, tipXp: 75, bar: 'rune_bar', v: 200, c: '#38c8d8' },
+];
+ARROW_TIERS.forEach((t, i) => {
+  add(`${t.id}_arrowtips`, { name: `${t.name} arrowtips`, stack: true, value: Math.ceil(t.v / 2), art: 'arrow', c: t.c });
+  add(`${t.id}_arrows`, { name: `${t.name} arrows`, stack: true, value: t.v, art: 'arrow', c: t.c, ammo: t.str, arrowTier: i, slot: 'ammo', bonus: { atk: 0, str: 0, def: 0, a: {}, rng: 0 }, req: { skill: 'ranged', level: [1, 1, 5, 20, 30, 40][i] } });
+  RECIPES.push({ id: `${t.id}_arrowtips`, station: 'anvil', tier: Math.min(i, 5), out: `${t.id}_arrowtips`, inputs: { [t.bar]: 1 }, level: t.tipLv, xp: t.tipXp, chance: 1, n: 15 });
+  RECIPES.push({ id: `${t.id}_arrows`, station: 'fletch', skill: 'fletching', out: `${t.id}_arrows`, inputs: { headless_arrow: 15, [`${t.id}_arrowtips`]: 15 }, level: t.fl, xp: Math.round(t.xp * 15 * 10) / 10, chance: 1, n: 15 });
+});
+ARROW_IDS.push(...ARROW_TIERS.map((t) => `${t.id}_arrows`).reverse());
+/** bows: [logs, prefix, Ranged req, ranged attack, max arrow tier, [shortbow fletch lv, xp], [longbow fletch lv, xp]] (OSRS values) */
+export const BOW_WOODS = [
+  ['logs', '', 1, 8, 1, [5, 5], [10, 10], '#b9824a'], ['oak_logs', 'oak_', 5, 14, 2, [20, 16.5], [25, 25], '#9a6a3a'],
+  ['willow_logs', 'willow_', 20, 20, 3, [35, 33.3], [40, 41.5], '#7a9a5a'], ['maple_logs', 'maple_', 30, 29, 4, [50, 50], [55, 58.3], '#c9803a'],
+  ['yew_logs', 'yew_', 40, 47, 5, [65, 67.5], [70, 75], '#6a4a2a'], ['magic_logs', 'magic_', 50, 69, 5, [80, 83.3], [85, 91.5], '#4a7ac8'],
+];
+for (const [logs, pre, req, atk, maxArrow, sb, lb, c] of BOW_WOODS) {
+  const wood = pre ? pre[0].toUpperCase() + pre.slice(1, -1) + ' ' : '';
+  for (const [kind, f, interval, mult] of [['shortbow', sb, 1.8, 1], ['longbow', lb, 2.4, 1]]) {
+    const id = `${pre}${kind}`, value = Math.round(40 * (1 + atk / 8) ** 1.6);
+    add(`${id}_u`, { name: `${wood}${kind} (u)`.replace(/^./, (x) => x.toUpperCase()), stack: false, value: Math.round(value / 2), art: 'bow', c });
+    add(id, { name: `${wood}${kind}`.replace(/^./, (x) => x.toUpperCase()), stack: false, value, art: 'bow', c, slot: 'weapon', req: { skill: 'ranged', level: req }, interval, wk: 'bow', two: true, maxArrow, reach: kind === 'longbow' ? 190 : 170, bonus: { atk: atk * mult, str: 0, def: 0, a: {}, rng: atk * mult } });
+    RECIPES.push({ id: `${id}_u`, station: 'fletch', skill: 'fletching', out: `${id}_u`, inputs: { [logs]: 1 }, level: f[0], xp: f[1], chance: 1 });
+    RECIPES.push({ id, station: 'fletch', skill: 'fletching', out: id, inputs: { [`${id}_u`]: 1, bow_string: 1 }, level: f[0], xp: f[1], chance: 1 });
+  }
+}
+RECIPES.push({ id: 'bow_string', station: 'craft', skill: 'crafting', out: 'bow_string', inputs: { flax: 1 }, level: 10, xp: 15, chance: 1 });
+
+// ======================= OSRS standard spellbook =======================
+/** runes: [id, name, colour, value, runecrafting level, rc xp per rune] (OSRS) */
+export const RUNES = [
+  ['air_rune', 'Air rune', '#d8eef8', 4, 1, 5], ['mind_rune', 'Mind rune', '#e8a040', 3, 2, 5.5], ['water_rune', 'Water rune', '#3b8eea', 4, 5, 6],
+  ['earth_rune', 'Earth rune', '#8a6a3a', 4, 9, 6.5], ['fire_rune', 'Fire rune', '#e8453c', 4, 14, 7], ['body_rune', 'Body rune', '#4a7ae8', 3, 20, 7.5],
+  ['cosmic_rune', 'Cosmic rune', '#e8e04a', 50, 27, 8], ['chaos_rune', 'Chaos rune', '#d8a020', 40, 35, 8.5], ['astral_rune', 'Astral rune', '#e8d0e8', 100, 40, 8.7],
+  ['nature_rune', 'Nature rune', '#3fb950', 80, 44, 9], ['law_rune', 'Law rune', '#2a4ad8', 120, 54, 9.5], ['death_rune', 'Death rune', '#4a4a5a', 120, 65, 10],
+  ['blood_rune', 'Blood rune', '#c8102e', 200, 77, 23.8], ['soul_rune', 'Soul rune', '#b8a8e8', 150, 90, 29.7], ['wrath_rune', 'Wrath rune', '#8a1a3a', 250, 95, 8],
+];
+for (const [id, name, c, v, lvl, xp] of RUNES) {
+  add(id, { name, stack: true, value: v, art: 'rune', c, rune: true });
+  RECIPES.push({ id: `rc_${id}`, station: 'runecraft', skill: 'runecrafting', out: id, inputs: { rune_essence: 1 }, level: lvl, xp, chance: 1 });
+}
+/** elemental staves supply unlimited runes of their element */
+for (const [el, c] of [['water', '#3b8eea'], ['earth', '#8a6a3a'], ['fire', '#e8453c']]) add(`${el}_staff`, { name: `Staff of ${el}`, stack: false, value: 1500, art: 'staff', c, infinite: `${el}_rune`, slot: 'weapon', req: { skill: 'magic', level: 1 }, interval: 2.4, wk: 'staff', two: true, bonus: { atk: 10, str: 0, def: 0, a: {}, mag: 10 } });
+const R = (o) => o;
+// combat spells: OSRS level, runes, max hit, base xp
+const ELEM = ['wind', 'water', 'earth', 'fire'];
+const TIER_SPELLS = [
+  ['strike', 'Strike', [1, 5, 9, 13], [2, 4, 6, 8], [5.5, 7.5, 9.5, 11.5], [{ air_rune: 1, mind_rune: 1 }, { water_rune: 1, air_rune: 1, mind_rune: 1 }, { earth_rune: 2, air_rune: 1, mind_rune: 1 }, { fire_rune: 3, air_rune: 2, mind_rune: 1 }]],
+  ['bolt', 'Bolt', [17, 23, 29, 35], [9, 10, 11, 12], [13.5, 16.5, 19.5, 22.5], [{ air_rune: 2, chaos_rune: 1 }, { water_rune: 2, air_rune: 2, chaos_rune: 1 }, { earth_rune: 3, air_rune: 2, chaos_rune: 1 }, { fire_rune: 4, air_rune: 3, chaos_rune: 1 }]],
+  ['blast', 'Blast', [41, 47, 53, 59], [13, 14, 15, 16], [25.5, 28.5, 31.5, 34.5], [{ air_rune: 3, death_rune: 1 }, { water_rune: 3, air_rune: 3, death_rune: 1 }, { earth_rune: 4, air_rune: 3, death_rune: 1 }, { fire_rune: 5, air_rune: 4, death_rune: 1 }]],
+  ['wave', 'Wave', [62, 65, 70, 75], [17, 18, 19, 20], [36, 37.5, 40, 42.5], [{ air_rune: 5, blood_rune: 1 }, { water_rune: 7, air_rune: 5, blood_rune: 1 }, { earth_rune: 7, air_rune: 5, blood_rune: 1 }, { fire_rune: 7, air_rune: 5, blood_rune: 1 }]],
+  ['surge', 'Surge', [81, 85, 90, 95], [21, 22, 23, 24], [44.5, 46.5, 48.5, 50.5], [{ air_rune: 7, wrath_rune: 1 }, { water_rune: 10, air_rune: 7, wrath_rune: 1 }, { earth_rune: 10, air_rune: 7, wrath_rune: 1 }, { fire_rune: 10, air_rune: 7, wrath_rune: 1 }]],
+];
+for (const [k, K, lv, mh, xp, runes] of TIER_SPELLS) ELEM.forEach((e, i) => SPELLS.push(R({ id: `${e}_${k}`, name: `${e[0].toUpperCase() + e.slice(1)} ${K}`, type: 'combat', elem: e, level: lv[i], maxHit: mh[i], xp: xp[i], runes: runes[i] })));
+SPELLS.push({ id: 'crumble_undead', name: 'Crumble Undead', type: 'combat', elem: 'earth', undeadOnly: true, level: 39, maxHit: 15, xp: 24.5, runes: { earth_rune: 2, air_rune: 2, chaos_rune: 1 }, blurb: 'Undead only' });
+SPELLS.push({ id: 'confuse', name: 'Confuse', type: 'curse', curse: 'confuse', level: 3, xp: 13, runes: { water_rune: 3, earth_rune: 2, body_rune: 1 }, blurb: "Target's accuracy -5%" });
+SPELLS.push({ id: 'weaken', name: 'Weaken', type: 'curse', curse: 'weaken', level: 11, xp: 21, runes: { water_rune: 3, earth_rune: 2, body_rune: 1 }, blurb: "Target's max hit -5%" });
+SPELLS.push({ id: 'curse', name: 'Curse', type: 'curse', curse: 'curse', level: 19, xp: 29, runes: { water_rune: 2, earth_rune: 3, body_rune: 1 }, blurb: "Target's defence -5%" });
+SPELLS.push({ id: 'bind', name: 'Bind', type: 'bind', hold: 5, maxHit: 0, level: 20, xp: 30, runes: { earth_rune: 3, water_rune: 3, nature_rune: 2 }, blurb: 'Holds a melee target for 5s' });
+SPELLS.push({ id: 'snare', name: 'Snare', type: 'bind', hold: 10, maxHit: 3, level: 50, xp: 60, runes: { earth_rune: 4, water_rune: 4, nature_rune: 3 }, blurb: 'Holds a melee target for 10s' });
+SPELLS.push({ id: 'entangle', name: 'Entangle', type: 'bind', hold: 15, maxHit: 5, level: 79, xp: 89, runes: { earth_rune: 5, water_rune: 5, nature_rune: 4 }, blurb: 'Holds a melee target for 15s' });
+SPELLS.push({ id: 'low_alch', name: 'Low Level Alchemy', type: 'alch', mult: 0.4, level: 21, xp: 31, runes: { fire_rune: 3, nature_rune: 1 }, blurb: 'Item -> 40% of its value in coins' });
+SPELLS.push({ id: 'high_alch', name: 'High Level Alchemy', type: 'alch', mult: 0.6, level: 55, xp: 65, runes: { fire_rune: 5, nature_rune: 1 }, blurb: 'Item -> 60% of its value in coins' });
+SPELLS.push({ id: 'varrock_tele', name: 'Varrock Teleport', type: 'tele', area: 'varrock', level: 25, xp: 35, runes: { fire_rune: 1, air_rune: 3, law_rune: 1 } });
+SPELLS.push({ id: 'lumbridge_tele', name: 'Lumbridge Teleport', type: 'tele', area: 'lumby', level: 31, xp: 41, runes: { earth_rune: 1, air_rune: 3, law_rune: 1 } });
+SPELLS.push({ id: 'falador_tele', name: 'Falador Teleport', type: 'tele', area: 'falador', level: 37, xp: 48, runes: { water_rune: 1, air_rune: 3, law_rune: 1 } });
+for (const sp of SPELLS) SPELL_BY_ID[sp.id] = sp;
+export const UNDEAD = new Set(['skeleton', 'zombie']);
 export const burnChance = (r, cookLevel, onRange) => (cookLevel >= r.stop ? 0 : (onRange ? 0.3 : 0.5) * ((r.stop - cookLevel) / Math.max(1, r.stop - r.level)));
 export const RECIPE_BY_ID = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
 export const STATIONS = {
@@ -415,6 +460,10 @@ export const FISH_NODES = {
     yields: [{ item: 'raw_lobster', level: 40, xp: 90 }] },
 };
 Object.assign(NODES, FISH_NODES);
+NODES.maple = { name: 'Maple tree', skill: 'woodcutting', tool: 'axe', level: 45, xp: 100, item: 'maple_logs', interval: 3, respawn: 9, chance: 0.33, color: '#c9803a' };
+NODES.yew = { name: 'Yew tree', skill: 'woodcutting', tool: 'axe', level: 60, xp: 175, item: 'yew_logs', interval: 3.4, respawn: 14, chance: 0.28, color: '#3a5a2a' };
+NODES.magic_tree = { name: 'Magic tree', skill: 'woodcutting', tool: 'axe', level: 75, xp: 250, item: 'magic_logs', interval: 3.8, respawn: 20, chance: 0.22, color: '#4a7ac8' };
+NODES.flax = { name: 'Flax', skill: 'crafting', tool: null, level: 1, xp: 1, item: 'flax', interval: 1.6, respawn: 3, chance: 1, color: '#8ab0e8' };
 /** what a node can give (mining/woodcutting nodes have a single `item`) */
 export const nodeYields = (n) => n.yields || [{ item: n.item, level: n.level, xp: n.xp }];
 // ---- areas: side-scrolling maps. entities: [type, kind, x]  (type: monster|node|station|sign)
@@ -538,3 +587,20 @@ export const PROTECT = { melee: 'protect_from_melee', ranged: 'protect_from_miss
 export const BAG_SLOTS = 28;
 export const SHOP_BUY = ['hammer', 'bronze_pickaxe', 'bronze_axe', 'iron_pickaxe', 'iron_axe', 'bronze_dagger', 'bronze_scimitar', 'bronze_mace', 'small_net', 'fishing_rod', 'harpoon', 'lobster_pot', 'feather', 'anti_dragon_shield', 'shortbow', 'oak_shortbow', 'bronze_arrows', 'iron_arrows', 'air_rune', 'mind_rune', 'water_rune', 'earth_rune', 'fire_rune', 'chaos_rune', 'rune_essence'];
 export const SELL_RATE = 0.5;
+// higher-level trees + flax (OSRS fletching supply chain)
+AREAS.falador.entities.push(['node', 'maple', 1480], ['node', 'maple', 1640]);
+AREAS.varrock.entities.push(['node', 'yew', 1600], ['node', 'yew', 1800]);
+AREAS.mage_tower.entities.push(['node', 'magic_tree', 1680]);
+AREAS.port_sarim.entities.push(['node', 'flax', 1640], ['node', 'flax', 1720]);
+// shop + drops for the OSRS ranged/magic content
+SHOP_BUY.push('longbow', 'oak_longbow', 'willow_shortbow', 'steel_arrows', 'flax', 'bow_string', 'staff', 'air_staff', 'water_staff', 'earth_staff', 'fire_staff', 'body_rune', 'nature_rune', 'law_rune');
+for (const [mon, drops] of Object.entries({
+  skeleton: [['iron_arrows', 0.25, 4, 12], ['body_rune', 0.1, 2, 6]], zombie: [['body_rune', 0.15, 2, 5]], guard: [['steel_arrows', 0.2, 3, 10]],
+  wizard: [['body_rune', 0.25, 2, 6]], dark_wizard: [['body_rune', 0.3, 3, 8], ['cosmic_rune', 0.1, 1, 3], ['law_rune', 0.08, 1, 3], ['nature_rune', 0.1, 1, 4]],
+  moss_giant: [['law_rune', 0.1, 2, 4], ['cosmic_rune', 0.1, 2, 4]], hill_giant: [['nature_rune', 0.08, 2, 5], ['mithril_arrows', 0.05, 3, 8]],
+  fire_giant: [['blood_rune', 0.08, 2, 5], ['rune_arrows', 0.04, 3, 8]], greater_demon: [['blood_rune', 0.12, 3, 8], ['rune_arrowtips', 0.06, 5, 15]],
+  black_demon: [['blood_rune', 0.2, 5, 12], ['soul_rune', 0.08, 2, 6], ['rune_arrows', 0.08, 5, 15]],
+  green_dragon: [['adamant_arrows', 0.1, 5, 12], ['yew_logs', 0.1, 3, 8], ['law_rune', 0.1, 2, 5]], bronze_dragon: [['adamant_arrowtips', 0.12, 5, 15]],
+  iron_dragon: [['rune_arrowtips', 0.08, 5, 12], ['magic_logs', 0.05, 2, 5]], steel_dragon: [['rune_arrows', 0.1, 6, 15], ['wrath_rune', 0.05, 2, 5]],
+  chaos_elemental: [['wrath_rune', 0.3, 5, 15], ['soul_rune', 0.3, 5, 15], ['astral_rune', 0.3, 5, 15]], pirate: [['iron_arrows', 0.2, 5, 12]],
+})) if (MONSTERS[mon]) for (const [id, p, a, b] of drops) MONSTERS[mon].drops.push({ id, p, n: [a, b] });

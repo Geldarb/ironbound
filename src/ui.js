@@ -144,7 +144,7 @@ export class UI {
     for (const s of SLOTS) {
       const id = d.equip[s.id], it = ITEMS[id], e = d.equipEnch[s.id], rc = rarityOf(e);
       const blocked = !id && s.id === 'shield' && d.equip.weapon && ITEMS[d.equip.weapon].two;
-      const r = el('div', 'row' + (id ? '' : ' off'), `${id ? img(id) : '<span class="slotImg"></span>'}<div class="tx"><b${rc ? ` style="color:${rc.color}"` : ''}>${s.name}: ${id ? esc(it.name) : 'empty'}</b><small>${id ? statLine(it) : blocked ? 'Two-handed weapon in use' : 'Nothing equipped'}</small>${e ? `<small style="color:${rc.color}">${rc.name}: ${e.mods.map(modText).join(' · ')}</small>` : ''}</div>${id ? '<button class="btn sm">Remove</button>' : ''}`);
+      const r = el('div', 'row' + (id ? '' : ' off'), `${id ? img(id) : '<span class="slotImg"></span>'}<div class="tx"><b${rc ? ` style="color:${rc.color}"` : ''}>${s.name}: ${id ? esc(it.name) + (s.id === 'ammo' ? ` ×${fmt(d.ammoN || 0)}` : '') : 'empty'}</b><small>${s.id === 'ammo' ? (id ? `Ranged strength ${it.ammo}${g.ammoProblem && ITEMS[d.equip.weapon]?.wk === 'bow' ? ` · <b style="color:#ff8a80">${esc(g.ammoProblem)}</b>` : ''}` : 'Equip arrows from your Bag (the whole stack)') : id ? statLine(it) : blocked ? 'Two-handed weapon in use' : 'Nothing equipped'}</small>${e ? `<small style="color:${rc.color}">${rc.name}: ${e.mods.map(modText).join(' · ')}</small>` : ''}</div>${id ? '<button class="btn sm">Remove</button>' : ''}`);
       if (rc) r.style.borderColor = rc.color;
       r.dataset.slot = s.id;
       if (id) r.querySelector('button').onclick = () => g.unequip(s.id);
@@ -190,17 +190,33 @@ export class UI {
     }
   }
   r_magic(b) {
-    const g = this.g;
-    b.appendChild(el('div', 'row', `<div class="tx"><b>Magic level ${g.level('magic')}</b><small>Wield a staff and pick Cast: it autocasts the chosen spell (or your best one) using runes from the bag.</small></div>`));
-    for (const s of SPELLS) {
-      const can = g.level('magic') >= s.level;
-            const auto = g.data.autocast === s.id, ok = g.canCast(s.id);
-      const r = el('div', 'row' + (ok ? '' : ' off'), `<div class="tx"><b>${s.name}</b><small>Level ${s.level} · max hit ${s.maxHit} · ${Object.entries(s.runes).map(([id, n]) => `${n} ${ITEMS[id].name.replace(' rune', '')}`).join(' + ')}</small></div><div class="btns"><button class="btn sm" data-cast ${ok ? '' : 'disabled'}>Cast</button><button class="btn sm${auto ? ' gold' : ''}" data-auto ${ok || auto ? '' : 'disabled'}>${auto ? 'Auto ✓' : 'Auto'}</button></div>`);
-      r.dataset.spell = s.id;
-      r.querySelector('[data-cast]').onclick = () => { const t = g.targetEnt; g.castSpell(s.id, t?.type === 'monster' && t.dead <= 0 ? t : null); this.renderSheet(true); };
-      r.querySelector('[data-auto]').onclick = () => { g.setAutocast(auto ? null : s.id); this.renderSheet(true); };
-      b.appendChild(r);
+    const g = this.g, lv = g.level('magic'), free = g.freeRune;
+    const short = (id) => ITEMS[id].name.replace(' rune', '');
+    b.appendChild(el('div', 'row', `<div class="tx"><b>Standard spellbook · Magic ${lv}</b><small>Wield a staff and use Cast style to autocast a combat spell (or your best). ${free ? `Your staff supplies unlimited ${short(free).toLowerCase()} runes.` : 'Elemental staves supply unlimited runes of their element.'}</small></div>`));
+    const groups = [['combat', 'Combat spells'], ['curse', 'Curses'], ['bind', 'Binding'], ['alch', 'Alchemy'], ['tele', 'Teleports']];
+    for (const [type, title] of groups) {
+      b.appendChild(el('h4', 'spellHead', title));
+      const grid = el('div', 'spellGrid'); b.appendChild(grid);
+      for (const s of SPELLS.filter((x) => x.type === type)) {
+        const ok = g.canCast(s.id), locked = lv < s.level, auto = g.data.autocast === s.id;
+        const runes = Object.entries(s.runes).map(([id, n]) => `<span class="${id === free ? 'free' : g.count(id) >= n ? '' : 'miss'}">${n} ${short(id)}</span>`).join(' ');
+        const info = s.type === 'combat' ? `max ${s.maxHit}${s.undeadOnly ? ' · undead' : ''}` : s.type === 'tele' ? '→ ' + esc(AREAS[s.area].name) : esc(s.blurb || '');
+        const r = el('div', 'spell' + (locked ? ' locked' : ok ? '' : ' off') + (auto ? ' auto' : ''), `<div class="sn"><b>${s.name}</b><em>Lv ${s.level}</em></div><small>${info}</small><small class="rn">${runes}</small><div class="btns">${s.type === 'combat' ? `<button class="btn sm${auto ? ' gold' : ''}" data-auto>${auto ? 'Auto ✓' : 'Auto'}</button>` : ''}<button class="btn sm" data-cast ${locked ? 'disabled' : ''}>Cast</button></div>`);
+        r.dataset.spell = s.id;
+        r.querySelector('[data-cast]').onclick = () => {
+          if (s.type === 'alch') return this.openAlch(s);
+          const t = g.targetEnt; g.castSpell(s.id, t?.type === 'monster' && !(t.dead > 0) ? t : null); this.renderSheet(true);
+        };
+        const au = r.querySelector('[data-auto]'); if (au) au.onclick = () => { g.setAutocast(auto ? null : s.id); this.renderSheet(true); };
+        grid.appendChild(r);
+      }
     }
+  }
+  openAlch(sp) {
+    const g = this.g, items = g.data.bag.map((s, i) => ({ s, i })).filter(({ s }) => s.id !== 'coins');
+    const c = this.modal(`<h3>${esc(sp.name)}</h3><p class="note">Tap an item to turn it into ${Math.round(sp.mult * 100)}% of its value.</p><div class="tbag">${items.map(({ s, i }) => `<button class="cell" data-i="${i}" title="${esc(itemName(s.id))}: ${Math.max(1, Math.floor((ITEMS[s.id].value || 1) * sp.mult))} coins">${img(s.id)}${s.n > 1 ? `<i>${fmt(s.n)}</i>` : ''}</button>`).join('') || '<span class="note">Bag is empty</span>'}</div><div class="btns"><button class="btn" id="mX" style="flex:1">Close</button></div>`);
+    c.querySelectorAll('[data-i]').forEach((x) => { x.onclick = () => { g.castSpell(sp.id, { bagIdx: +x.dataset.i }); if (g.canCast(sp.id)) this.openAlch(sp); else { this.closeModal(); this.renderSheet(true); } }; });
+    c.querySelector('#mX').onclick = () => { this.closeModal(); this.renderSheet(true); };
   }
   r_skills(b) {
     const g = this.g;

@@ -57,13 +57,13 @@ export function simulateOffline(game, awaySeconds, opts = {}) {
         const perKill = Math.max(1, Math.ceil(ttk / hc.interval));
         if (hc.type === 'ranged' || hc.type === 'magic') {
           const sp = hc.spell, free = game.freeRune;
-          const shots = hc.type === 'ranged' ? ARROW_IDS.reduce((a, id) => a + game.count(id), 0)
+          const shots = hc.type === 'ranged' ? (hc.ammo ? game.data.ammoN || 0 : 0)
             : Math.min(...Object.entries(sp?.runes || { none: 1 }).map(([r, n]) => (r === free ? Infinity : Math.floor(game.count(r) / n))));
           const byAmmo = Math.floor(shots / perKill);
           if (byAmmo < kills) { kills = byAmmo; rep.stopped = hc.type === 'ranged' ? 'out of arrows' : 'out of runes'; }
           if (kills > 0) {
             let need = kills * perKill;
-            if (hc.type === 'ranged') for (const id of ARROW_IDS) { const k = Math.min(need, game.count(id)); if (k) { game.removeItem(id, k); need -= k; rep.spent[id] = (rep.spent[id] || 0) + k; } }
+            if (hc.type === 'ranged') { const id = hc.ammo; game.useAmmo(need); rep.spent[id] = (rep.spent[id] || 0) + need; }
             else { for (const [r, n] of Object.entries(sp.runes)) if (r !== free) { game.removeItem(r, n * need); rep.spent[r] = (rep.spent[r] || 0) + n * need; } game.gain('magic', sp.xp * need); }
           }
         }

@@ -195,6 +195,8 @@ export function drawHero(ctx, x, y, s, o) {
   });
   leg(-3.5, legB, true); leg(3.5, legF, false);
   ctx.save(); ctx.translate(lean * 0.4, bodyDy + breathe * 0.12);
+  // ---- quiver on the back when arrows are equipped
+  if (equip.ammo && ITEMS[equip.ammo]) { ctx.save(); ctx.translate(-10 + lean * 0.3, sho + 6); ctx.rotate(-0.45); rrect(ctx, -4, -10, 8, 22, 2, '#7a4a28'); rrect(ctx, -4, -4, 8, 3, 1, '#5a3418', null); for (let i = -1; i <= 1; i++) { rrect(ctx, i * 2.6 - 1, -16, 2, 7, 1, '#f3ead2', null); rrect(ctx, i * 2.6 - 0.8, -10, 1.6, 2, 0.5, ITEMS[equip.ammo].c, null); } ctx.restore(); }
   // ---- far arm (off hand; carries the shield)
   const sleeveC = equip.body ? tier(equip.body, 0.8) : shade(L.shirt, 0.82), skinD = shade(L.skin, 0.82);
   limb(ctx, -9 + lean * 0.3, sho + 2, armB, () => {
@@ -209,7 +211,11 @@ export function drawHero(ctx, x, y, s, o) {
   if (equip.body) { const b = ITEMS[equip.body]; poly(ctx, [[-7, sho + 1], [7, sho + 1], [5, sho + 12], [-5, sho + 12]], shade(b.c, 1.18), null); rrect(ctx, -2, sho + 1, 4, 20, 1, shade(b.c, 0.7), null); rrect(ctx, -11, sho - 3, 22, 4, 2, dark(equip.body), null); }
   ctx.restore();
   // ---- shield on the off hand
-  if (equip.shield && !two) { ctx.save(); ctx.translate(-2 + lean * 0.3, sho + 14); ctx.scale(0.82, 0.82); drawGlyph(ctx, 'shield', ITEMS[equip.shield].c, ITEMS[equip.shield].d); ctx.restore(); }
+  // strapped to the off-hand forearm: follows the far arm's swing (walk, attack, idle) instead of floating on the torso
+  if (equip.shield && !two && ITEMS[equip.shield]) {
+    const px = -9 + lean * 0.3, py = sho + 2, hx = px + 13 * Math.sin(armB), hy = py + 13 * Math.cos(armB);
+    ctx.save(); ctx.translate(hx - 1, hy - 1); ctx.rotate(-armB * 0.35); ctx.scale(0.78, 0.78); drawGlyph(ctx, 'shield', ITEMS[equip.shield].c, ITEMS[equip.shield].d); ctx.restore();
+  }
   // ---- head (blocky)
   const hy = sho - 3 - (lookDown ? 1 : 0);
   ctx.save(); ctx.translate(lean * 0.6 + (pose && pose.name === 'eat' ? 0 : 0), 0);
@@ -320,8 +326,12 @@ export function drawNode(ctx, kind, x, y, s, depleted, color, t = 0, chip = 0) {
   ellipse(ctx, 0, 0, 25, 5, 'rgba(0,0,0,.22)', null);
   const shake = chip > 0 ? Math.sin(chip * 40) * 2 * chip : 0;
   ctx.translate(shake, 0);
-  if (kind === 'tree' || kind === 'oak' || kind === 'willow') {
-    const g = color, trunk = kind === 'oak' ? '#6a4524' : kind === 'willow' ? '#5a6a4a' : '#7a5530';
+  if (kind === 'flax') {
+    for (let i = 0; i < 5; i++) { const fx = -16 + i * 8, h = depleted ? 6 : 26 + (i % 2) * 6, sw = Math.sin(t * 2 + i) * 1.5; ctx.strokeStyle = '#5a8a3a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(fx, 0); ctx.quadraticCurveTo(fx + sw, -h / 2, fx + sw * 2, -h); ctx.stroke(); if (!depleted) circle(ctx, fx + sw * 2, -h - 2, 3.2, '#8ab0e8', OUT, 1); }
+    ctx.restore(); return;
+  }
+  if (kind === 'tree' || kind === 'oak' || kind === 'willow' || kind === 'maple' || kind === 'yew' || kind === 'magic_tree') {
+    const g = color, trunk = { oak: '#6a4524', willow: '#5a6a4a', maple: '#7a4a2a', yew: '#4a3220', magic_tree: '#5a5a7a' }[kind] || '#7a5530';
     if (depleted) {
       rrect(ctx, -10, -13, 20, 13, 3, shade(trunk, 0.9)); ellipse(ctx, 0, -13, 10, 4.5, '#d4b27a'); ellipse(ctx, 0, -13, 6, 2.6, '#b8935c', null); ellipse(ctx, 0, -13, 2.6, 1.2, '#d4b27a', null);
       rrect(ctx, 14, -4, 9, 4, 1.5, trunk, null);
@@ -339,6 +349,8 @@ export function drawNode(ctx, kind, x, y, s, depleted, color, t = 0, chip = 0) {
       poly(ctx, [[-34, -52], [-24, -80], [0, -96], [24, -80], [34, -52], [20, -44], [-20, -44]], g);
       poly(ctx, [[-34, -52], [-24, -80], [-4, -72], [-10, -48]], shade(g, 0.86), null); poly(ctx, [[0, -96], [24, -80], [6, -72], [-4, -72], [-24, -80]], shade(g, 1.18), null); poly(ctx, [[34, -52], [20, -44], [-4, -48], [6, -72], [24, -80]], shade(g, 0.78), null);
       poly(ctx, [[-34, -52], [-24, -80], [0, -96], [24, -80], [34, -52], [20, -44], [-20, -44]], null, OUT, 1.8);
+      if (kind === 'magic_tree') for (let i = 0; i < 4; i++) { const a = t * 1.5 + i * 1.6; circle(ctx, Math.cos(a) * 22, -70 + Math.sin(a * 1.3) * 16, 2, '#d8f0ff', null); }
+      if (kind === 'yew') { poly(ctx, [[-20, -44], [0, -30], [20, -44]], shade(g, 0.7), OUT, 1.4); }
     }
   } else {
     const dull = depleted, base = dull ? '#6d6d75' : kind === 'coal' ? '#4a4b52' : kind === 'rune_essence' ? '#c8c0a8' : '#8b8b96';

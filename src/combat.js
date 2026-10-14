@@ -50,7 +50,7 @@ export function heroCombat(levels, equip, stanceId, mods = NO_MODS, ctx = {}) {
   } else if (style.type === 'magic') {
     spell = ctx.spell || null;
     atkRoll = attackRoll(levels.magic || 1, g.mag || 0, sb('magic'));
-    baseMax = spell ? spell.maxHit + Math.floor((levels.magic || 1) / 15) : 0;
+    baseMax = spell ? spell.maxHit : 0; // OSRS: standard spells have fixed max hits
   } else {
     atkRoll = attackRoll(levels.attack, g.a[style.type] || 0, sb('attack'));
     baseMax = maxHit(levels.strength, g.str, sb('strength'));

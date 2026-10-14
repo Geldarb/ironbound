@@ -1,9 +1,9 @@
 // Single-slot localStorage save (versioned; the shape leaves room for more skills / slots later).
-import { SKILL_IDS, SLOT_IDS, START_AREA, AREAS } from './data.js';
+import { SKILL_IDS, SLOT_IDS, START_AREA, AREAS, ARROW_IDS } from './data.js';
 import { levelForXp } from './xp.js';
 /** v7: the old map (meadow/quarry/peaks) was replaced; send old area ids to the closest new area */
 export const AREA_RENAMES = { meadow: 'lumby', quarry: 'draynor', peaks: 'alkharid' };
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 export const SAVE_KEY = 'ironbound-save-v1';
 export const LOOKS = [
   { skin: '#f2c9a0', hair: '#5a3a1e', shirt: '#3b8eea' },
@@ -80,6 +80,13 @@ export function migrate(d) {
   out.energy = Number.isFinite(d.energy) ? Math.max(0, Math.min(100, d.energy)) : 100;
   out.special = Number.isFinite(d.special) ? Math.max(0, Math.min(100, d.special)) : 100;
   out.achievements = d.achievements && typeof d.achievements === 'object' ? d.achievements : {};
+  // v8: ammo slot. Arrows used to be drawn from the bag: quiver the best stack the save already has.
+  out.ammoN = Number.isInteger(d.ammoN) && d.ammoN > 0 && out.equip.ammo ? d.ammoN : 0;
+  if (!out.ammoN) out.equip.ammo = null;
+  if ((d.v || 0) < 8 && !out.equip.ammo && Array.isArray(out.bag)) {
+    const best = ARROW_IDS.find((id) => out.bag.some((s) => s.id === id));
+    if (best) { const n = out.bag.filter((s) => s.id === best).reduce((a, s) => a + (s.n || 0), 0); out.bag = out.bag.filter((s) => s.id !== best); out.equip.ammo = best; out.ammoN = n; }
+  }
   out.v = SAVE_VERSION;
   return out;
 }

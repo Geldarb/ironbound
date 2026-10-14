@@ -487,11 +487,11 @@ check(MONSTERS.alpha_wolf.boss && MONSTERS.alpha_wolf.epFlat >= 5 && MONSTERS.al
   // ranged
   const r = mk(31); r.data.equip.weapon = 'shortbow'; r.data.xp.ranged = xpForLevel(20);
   let hc = r.combat; check(hc.type === 'ranged' && hc.maxHit === 0, 'bow without arrows has no damage');
-  r.addItem('iron_arrows', 30); hc = r.combat;
+  r.addItem('iron_arrows', 30); r.equip('iron_arrows'); hc = r.combat;
   check(hc.maxHit > 0 && hc.ammo === 'iron_arrows' && hc.reach > 100 && Number.isFinite(hc.atkRoll), 'bow uses Ranged level + arrows');
   r.select(r.ents.find((e) => e.kind === 'chicken').id); const rx0 = r.data.xp.ranged;
   for (let i = 0; i < 400; i++) r.update(0.05);
-  check(r.count('iron_arrows') < 30 && r.data.xp.ranged > rx0 && r.data.xp.attack === 0, 'ranged consumes arrows and trains Ranged');
+  check(r.data.ammoN < 30 && r.count('iron_arrows') === 0 && r.data.xp.ranged > rx0 && r.data.xp.attack === 0, 'ranged consumes arrows and trains Ranged');
   r.setStance('defensive'); check(stanceXpOf(r).map((x) => x[0]).join() === 'ranged,defence', 'longrange trains Ranged + Defence');
   // magic
   const w = mk(32); w.data.equip.weapon = 'staff'; w.select(w.ents.find((e) => e.kind === 'chicken').id);
@@ -499,7 +499,7 @@ check(MONSTERS.alpha_wolf.boss && MONSTERS.alpha_wolf.epFlat >= 5 && MONSTERS.al
   w.addItem('air_rune', 50); w.addItem('mind_rune', 50); check(w.combat.spell?.id === 'wind_strike' && w.combat.maxHit >= 2, 'staff casts best spell');
   w.select(w.ents.find((e) => e.kind === 'chicken').id); for (let i = 0; i < 400; i++) w.update(0.05);
   check(w.count('air_rune') < 50 && w.data.xp.magic > 0, 'magic spends runes and trains Magic');
-  w.data.equip.weapon = 'air_staff'; const a0 = w.count('air_rune'), m0 = w.count('mind_rune'); w.castSpell('wind_strike');
+  w.data.equip.weapon = 'air_staff'; const a0 = w.count('air_rune'), m0 = w.count('mind_rune'); w.castSpell('wind_strike', w.ents.find((e) => e.type === 'monster' && !(e.dead > 0)));
   check(w.count('air_rune') === a0 && w.count('mind_rune') === m0 - 1, 'staff of air supplies air runes');
   // fletching outputs
   const f = mk(33); f.addItem('logs', 2); f.addItem('feather', 15);

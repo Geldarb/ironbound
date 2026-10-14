@@ -1,5 +1,5 @@
 // Game model: character state + the traversable-area simulation. No DOM here (the UI listens to `game.on`).
-import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood, stanceXp, PRAYERS, PRAYER_BY_ID, BONE_XP, BONES, SLAYER_TASKS, SPELLS, SPELL_BY_ID, ACHIEVEMENTS, styleXp, ARROW_IDS, monsterStyle, PROTECT } from './data.js';
+import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood, stanceXp, PRAYERS, PRAYER_BY_ID, BONE_XP, BONES, SLAYER_TASKS, SPELLS, SPELL_BY_ID, ACHIEVEMENTS, styleXp, ARROW_IDS, monsterStyle, PROTECT, UNDEAD } from './data.js';
 import { levelForXp } from './xp.js';
 import { heroCombat, heroHitChance, monsterHitChance, combatLevel } from './combat.js';
 import { sumMods, rollEnchant, rollCost, nextPity, enchantCategory, gemFromMod, canCombineGems, combineGems as combineGemData, maxMods, MODS, modText } from './enchant.js';
@@ -71,12 +71,15 @@ export class Game {
     return out;
   }
   /** best arrows in the bag for an equipped bow */
-  get ammo() { return ARROW_IDS.find((id) => this.count(id) > 0) || null; }
+  /** arrows in the ammo slot the wielded bow can fire (OSRS: each bow has a best arrow tier), else null */
+  get ammo() { const d = this.data, id = d.equip.ammo; if (!id || !(d.ammoN > 0)) return null; const w = ITEMS[d.equip.weapon]; if (w?.wk === 'bow' && (ITEMS[id]?.arrowTier ?? 0) > (w.maxArrow ?? 9)) return null; return id; }
+  get ammoProblem() { const d = this.data, id = d.equip.ammo; if (!id || !(d.ammoN > 0)) return 'No arrows in your ammo slot'; return this.ammo ? null : `Your ${ITEMS[d.equip.weapon].name.toLowerCase()} can't fire ${ITEMS[id].name.toLowerCase()}`; }
+  useAmmo(n = 1) { const d = this.data; d.ammoN = Math.max(0, (d.ammoN || 0) - n); if (d.ammoN <= 0) { d.equip.ammo = null; d.ammoN = 0; } }
   /** spell a staff casts: the autocast spell if castable, else the best castable spell */
   get activeSpell() {
     const a = this.data.autocast && SPELL_BY_ID[this.data.autocast];
     if (a && this.canCast(a.id)) return a;
-    return [...SPELLS].reverse().find((sp) => this.canCast(sp.id)) || null;
+    return [...SPELLS].reverse().find((sp) => sp.type === 'combat' && !sp.undeadOnly && this.canCast(sp.id)) || null;
   }
   get combat() { return heroCombat(this.boostedLevels, this.data.equip, this.data.stance, this.mods, { ammo: this.ammo, spell: this.activeSpell }); }
   /** the stance actually in force (a weapon may not offer the saved one) */
@@ -164,17 +167,31 @@ export class Game {
   }
   /** a rune the equipped staff supplies for free (Staff of air -> air runes) */
   get freeRune() { return ITEMS[this.data.equip.weapon]?.infinite || null; }
+  runeCost(sp) { return Object.entries(sp.runes).filter(([r]) => r !== this.freeRune); }
   spendRunes(sp) { for (const [rune, n] of Object.entries(sp.runes)) if (rune !== this.freeRune) this.removeItem(rune, n); }
+  /** cast any standard-spellbook spell. target: monster entity (combat/curse/bind), {bagIdx} for alchemy */
   castSpell(spellId, target) {
     const sp = SPELL_BY_ID[spellId];
-    if (!sp || !this.canCast(spellId)) { this.toast('Cannot cast'); return false; }
+    if (!sp) return false;
+    if (this.level('magic') < sp.level) { this.toast(`Requires Magic ${sp.level}`); return false; }
+    if (!this.canCast(spellId)) { this.toast('You do not have enough runes'); return false; }
+    const mon = target?.type === 'monster' && !(target.dead > 0) ? target : null;
+    if ((sp.type === 'combat' || sp.type === 'curse' || sp.type === 'bind') && !mon) { this.toast('Select a monster first'); return false; }
+    if (sp.undeadOnly && !UNDEAD.has(mon.kind)) { this.toast('This spell only affects the undead'); return false; }
+    if (sp.type === 'curse' && mon.curse?.[sp.curse]) { this.toast('Already affected'); return false; }
+    if (sp.type === 'alch') {
+      const s = this.data.bag[target?.bagIdx]; if (!s || s.id === 'coins') { this.toast('Choose an item to alchemise'); return false; }
+      this.spendRunes(sp); const coins = Math.max(1, Math.floor((ITEMS[s.id].value || 1) * sp.mult));
+      if (s.n > 1) s.n--; else this.data.bag.splice(target.bagIdx, 1);
+      this.data.coins += coins; this.gain('magic', sp.xp); this.toast(`${sp.name}: +${coins} coins`); this.emit('cast', { spell: sp.id }); this.emit('change'); return true;
+    }
+    if (sp.type === 'tele') { this.spendRunes(sp); this.gain('magic', sp.xp); this.emit('cast', { spell: sp.id }); this.travel(sp.area); return true; }
     this.spendRunes(sp);
     this.gain('magic', sp.xp);
-    if (target?.type === 'monster') {
-      const dmg = Math.floor(this.rng() * (sp.maxHit + 1));
-      this.hitMonster(target, dmg, { xp: [['magic', 0.5]] });
-    }
-    this.toast(`Cast ${sp.name}`);
+    if (sp.type === 'curse') { mon.curse = { ...(mon.curse || {}), [sp.curse]: true }; this.toast(`${sp.name}: ${sp.blurb}`); }
+    if (sp.type === 'bind') { mon.hold = sp.hold; this.toast(`${sp.name}: held for ${sp.hold}s`); }
+    if (sp.maxHit) this.hitMonster(mon, Math.floor(this.rng() * (sp.maxHit + 1)), { xp: [['magic', 0.5]] });
+    this.emit('cast', { spell: sp.id, x: mon.x });
     this.emit('change');
     return true;
   }
@@ -441,6 +458,12 @@ export class Game {
   equip(id, idx = -1) {
     const c = this.canEquip(id);
     if (!c.ok) { this.toast(c.reason); return false; }
+    if (ITEMS[id].slot === 'ammo') { // the whole stack goes into the quiver
+      const d = this.data, n = this.count(id); if (n <= 0) return false;
+      if (d.equip.ammo && d.equip.ammo !== id) { if (!this.unequip('ammo')) return false; }
+      this.removeItem(id, n); d.equip.ammo = id; d.ammoN = (d.ammoN || 0) + n;
+      this.emit('change'); return true;
+    }
     if (idx < 0 || this.data.bag[idx]?.id !== id) idx = this.data.bag.findIndex((x) => x.id === id);
     if (idx < 0) return false;
     const it = ITEMS[id], slot = it.slot, d = this.data;
@@ -461,6 +484,7 @@ export class Game {
   unequip(slot) {
     const id = this.data.equip[slot];
     if (!id) return false;
+    if (slot === 'ammo') { const n = this.data.ammoN || 0; if (n && this.addItem(id, n) < n) { this.toast('Bag is full'); return false; } this.data.equip.ammo = null; this.data.ammoN = 0; this.emit('change'); return true; }
     if (this.slotsUsed >= BAG_SLOTS) { this.toast('Bag is full'); return false; }
     const e = this.data.equipEnch[slot];
     this.data.equip[slot] = null; delete this.data.equipEnch[slot]; this.addItem(id, 1, e);
@@ -674,7 +698,7 @@ export class Game {
     if (e.type === 'node') {
       const n = NODES[e.kind];
       if (this.level(n.skill) < n.level) { this.toast(`${n.name} need ${n.skill} level ${n.level}`); return false; }
-      if (!this.bestTool(n.tool)) { this.toast(`You need a ${TOOL_NAMES[n.tool] || n.tool}`); return false; }
+      if (n.tool && !this.bestTool(n.tool)) { this.toast(`You need a ${TOOL_NAMES[n.tool] || n.tool}`); return false; }
       if (n.bait && !this.count(n.bait)) { this.toast(`You need ${ITEMS[n.bait].name.toLowerCase()} as bait`); return false; }
     }
     this.target = id; this.hero.dest = null; this.hero.cd = 0.5; e.cd = 1.2;
@@ -752,19 +776,21 @@ export class Game {
   fight(m, dt) {
     const h = this.hero, def = MONSTERS[m.kind], hc = this.combat;
     h.state = 'attack';
+    if (m.hold > 0) m.hold -= dt;
     if (h.cd <= 0) {
       const wep = ITEMS[this.data.equip.weapon];
       // Ranged uses arrows from the bag; magic spends the spell's runes (staff 'Bash' style is melee and needs neither)
       if (hc.type === 'ranged') {
-        if (!hc.ammo) { this.toast('Out of arrows'); this.clearTarget(); return false; }
-        this.removeItem(hc.ammo, 1);
+        if (!hc.ammo) { this.toast(this.ammoProblem || 'Out of arrows'); this.clearTarget(); return false; }
+        this.useAmmo(1);
       } else if (hc.type === 'magic') {
         if (!hc.spell) { this.toast(this.data.autocast ? 'Out of runes for that spell' : 'No spell you can cast (need runes)'); this.clearTarget(); return false; }
+        if (hc.spell.undeadOnly && !UNDEAD.has(m.kind)) { this.toast('Crumble Undead only affects the undead'); this.clearTarget(); return false; }
         this.spendRunes(hc.spell); this.gain('magic', hc.spell.xp);
       }
       h.cd = hc.interval; h.swing = h.swingDur = Math.min(0.45, hc.interval * 0.6);
       this.emit('swing', { kind: wep?.wk || 'unarmed', type: hc.type, two: hc.two });
-      const hit = this.rng() < heroHitChance(hc, def);
+      const hit = this.rng() < Math.min(1, heroHitChance(hc, def) * (m.curse?.curse ? 1.05 : 1));
       let dmg = hit ? Math.floor(this.rng() * (hc.maxHit + 1)) : 0;
       const mods = hc.mods;
       if (dmg > 0 && mods.vs[def.family]) dmg = Math.round(dmg * (1 + mods.vs[def.family]));
@@ -778,7 +804,7 @@ export class Game {
     m.cd -= dt;
     if (m.cd <= 0 && m.dead <= 0) {
       m.cd = def.interval; m.swing = 0.3;
-      const r = this.monsterAttack(def);
+      const r = this.monsterAttack(def, m);
       let dmg = r.dmg;
       this.emit('mattack', { id: m.id, x: m.x, style: r.style, proj: r.proj, blocked: r.blocked });
       this.data.hp = Math.max(0, this.data.hp - dmg);
@@ -793,8 +819,9 @@ export class Game {
   }
   /** one monster attack roll: OSRS-like styles. Dragonfire ignores accuracy; anti-dragon shield and Protect from Magic cut it.
    *  Protect from Melee/Missiles/Magic fully block the matching normal attack. */
-  monsterAttack(def) {
+  monsterAttack(def, m = null) {
     const hc = this.combat, pray = (id) => this.prayerPoints > 0 && this.data.activePrayers.includes(id);
+    if (m?.hold > 0 && monsterStyle(def) === 'melee' && !def.fire) return { dmg: 0, style: 'melee', proj: null, blocked: true, held: true };
     if (def.fire && this.rng() < def.fire.chance) {
       let dmg = Math.floor(this.rng() * (def.fire.max + 1));
       if (ITEMS[this.data.equip.shield]?.antifire) dmg = Math.floor(dmg * 0.15);
@@ -803,8 +830,9 @@ export class Game {
     }
     const style = monsterStyle(def), proj = def.proj || (style === 'ranged' ? 'arrow' : style === 'magic' ? 'orb' : null);
     if (pray(PROTECT[style])) return { dmg: 0, style, proj, blocked: true };
-    const hit = this.rng() < monsterHitChance(hc, def);
-    return { dmg: hit ? Math.floor(this.rng() * (def.maxHit + 1)) : 0, style, proj, blocked: false };
+    const hit = this.rng() < monsterHitChance(hc, def) * (m?.curse?.confuse ? 0.95 : 1);
+    const max = m?.curse?.weaken ? Math.floor(def.maxHit * 0.95) : def.maxHit;
+    return { dmg: hit ? Math.floor(this.rng() * (max + 1)) : 0, style, proj, blocked: false };
   }
   hitMonster(m, dmg, o = {}) {
     const def = MONSTERS[m.kind];
@@ -873,11 +901,11 @@ export class Game {
   gather(e, dt) {
     const h = this.hero, n = NODES[e.kind];
     const info = this.toolInfo(n.tool), tool = info?.item;
-    if (!tool) { this.toast(`You need a ${TOOL_NAMES[n.tool] || n.tool}`); this.clearTarget(); return; }
+    if (!tool && n.tool) { this.toast(`You need a ${TOOL_NAMES[n.tool] || n.tool}`); this.clearTarget(); return; }
     if (n.bait && !this.count(n.bait)) { this.toast(`Out of ${ITEMS[n.bait].name.toLowerCase()}`); this.clearTarget(); return; }
     h.state = 'gather';
     if (h.cd > 0) return;
-    h.cd = n.interval / (1 + 0.2 * tool.toolTier) / (1 + sumMods([info.e]).gather); h.swing = h.swingDur = 0.45;
+    h.cd = n.interval / (1 + 0.2 * (tool?.toolTier || 0)) / (1 + sumMods([info?.e]).gather); h.swing = h.swingDur = 0.45;
     this.emit('swing', { kind: n.tool, gather: true, x: e.x, node: e.kind });
     if (this.rng() < this.gatherChance(n)) {
       const ys = this.availableYields(n), y = ys[Math.floor(this.rng() * ys.length)];
