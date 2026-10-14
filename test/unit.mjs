@@ -524,5 +524,29 @@ check(MONSTERS.alpha_wolf.boss && MONSTERS.alpha_wolf.epFlat >= 5 && MONSTERS.al
 }
 function stanceXpOf(g) { return g.combat.style.xp.map((k) => [k]); }
 
+// ---- monster attack styles, protection prayers, dragonfire, art ----
+{
+  const { monsterStyle } = await import('../src/data.js');
+  const { MONSTER_ART } = await import('../src/monsters.js');
+  check(monsterStyle(MONSTERS.goblin_archer) === 'ranged' && monsterStyle(MONSTERS.wizard) === 'magic' && monsterStyle(MONSTERS.goblin) === 'melee', 'monster attack styles');
+  check(['green_dragon', 'bronze_dragon', 'iron_dragon', 'steel_dragon'].every((k) => !MONSTERS[k] || MONSTERS[k].fire), 'dragons breathe fire');
+  const g = mk(41); g.data.prayerPoints = 50;
+  const tryAll = (def, n = 200) => { let s = 0, b = 0; for (let i = 0; i < n; i++) { const r = g.monsterAttack(def); s += r.dmg; b += r.blocked ? 1 : 0; } return { s, b }; };
+  for (const [k, pr] of [['goblin', 'protect_from_melee'], ['goblin_archer', 'protect_from_missiles'], ['wizard', 'protect_from_magic']]) {
+    g.data.activePrayers = [pr]; const on = tryAll(MONSTERS[k]); g.data.activePrayers = []; const off = tryAll(MONSTERS[k]);
+    check(on.s === 0 && on.b === 200 && off.s > 0, `${pr} blocks ${k}`);
+  }
+  g.data.activePrayers = ['protect_from_melee']; check(tryAll(MONSTERS.wizard).s > 0, 'wrong protect prayer does not block');
+  g.data.activePrayers = [];
+  const fireDef = { ...MONSTERS.green_dragon, fire: { chance: 1, max: 40 } };
+  const raw = tryAll(fireDef, 400).s; g.data.equip.shield = 'anti_dragon_shield'; const sh = tryAll(fireDef, 400).s;
+  check(ITEMS.anti_dragon_shield?.antifire && sh < raw * 0.25, 'anti-dragon shield reduces dragonfire');
+  const ctx = new Proxy({}, { get: (o, k) => (k in o ? o[k] : typeof k === 'string' && /^(create|measure)/.test(k) ? () => ({ addColorStop() {}, width: 1 }) : () => {}), set: (o, k, v) => { o[k] = v; return true; } });
+  for (const k of Object.keys(MONSTERS)) if (k !== 'chicken' && k !== 'cow') {
+    let ok = !!MONSTER_ART[k]; try { ok && MONSTER_ART[k](ctx, { t: 1, swing: 0.5, ph: 0, bob: 0, seed: 1, color: MONSTERS[k].color }); MONSTER_ART[k]?.(ctx, { t: 2, swing: null, ph: 1, bob: 0, seed: 2 }); } catch (e) { ok = false; console.log(k, e.message); }
+    check(ok, `${k} has procedural art`);
+  }
+}
+
 console.log(failed ? `\n${failed} of ${n} FAILED` : `\nall ${n} unit checks passed`);
 process.exit(failed ? 1 : 0);

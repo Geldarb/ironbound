@@ -1,5 +1,5 @@
 // DOM UI: HUD, target panel, stance row, nav + bottom sheets (gear, skills, bag/bank/shop, craft, map, settings).
-import { SKILLS, SKILL_BY_ID, STANCES, SLOTS, ITEMS, NODES, MONSTERS, AREAS, AREA_IDS, RECIPES, STATIONS, SHOP_BUY, BAG_SLOTS, TIERS, XP_RATE, WEAPON_KINDS, ALL_WEAPON_KINDS, TIER_BAR, OFFLINE, nodeYields, burnChance, isFood, isStackable, PRAYERS, BONE_XP, BONES, SLAYER_TASKS, SLAYER_MASTER, SPELLS, ACHIEVEMENTS } from './data.js';
+import { monsterStyle, SKILLS, SKILL_BY_ID, STANCES, SLOTS, ITEMS, NODES, MONSTERS, AREAS, AREA_IDS, RECIPES, STATIONS, SHOP_BUY, BAG_SLOTS, TIERS, XP_RATE, WEAPON_KINDS, ALL_WEAPON_KINDS, TIER_BAR, OFFLINE, nodeYields, burnChance, isFood, isStackable, PRAYERS, BONE_XP, BONES, SLAYER_TASKS, SLAYER_MASTER, SPELLS, ACHIEVEMENTS } from './data.js';
 import { levelProgress, xpForLevel } from './xp.js';
 import { RARITIES, rarityOf, modText, rollCost, enchantCategory, isEnchantable, PITY_EPIC, gemText, canCombineGems } from './enchant.js';
 import { heroHitChance, weaponKind } from './combat.js';
@@ -103,6 +103,7 @@ export class UI {
     chip.classList.toggle('auto', d.autoEat.on && fc > 0); chip.classList.toggle('empty', fc === 0);
   }
   updateTarget() {
+    const STYLE_ICON = { melee: '⚔ Melee', ranged: '🏹 Ranged', magic: '✨ Magic' };
     const g = this.g, e = g.targetEnt, box = $('target');
     this.targetLive = false;
     if (!e || e.type === 'sign' || e.type === 'station') {
@@ -114,7 +115,7 @@ export class UI {
     if (e.type === 'monster') {
       const m = MONSTERS[e.kind], hc = g.combat;
       const drops = m.drops.map((d) => `<span title="${esc(itemName(d.id))} ${Math.round(d.p * 100)}%">${img(d.id)}</span>`).join('');
-      box.innerHTML = `<div class="tp"><div class="nm"><span>${m.name}</span><em>Lv ${m.level}</em></div><div class="bar"><i style="width:${Math.round((e.dead > 0 ? 0 : e.hp / e.max) * 100)}%"></i></div>
+      box.innerHTML = `<div class="tp"><div class="nm"><span>${m.name}</span><em>${STYLE_ICON[monsterStyle(m)]}${m.fire ? ' 🔥' : ''} Lv ${m.level}</em></div><div class="bar"><i style="width:${Math.round((e.dead > 0 ? 0 : e.hp / e.max) * 100)}%"></i></div>
         <div>HP ${e.dead > 0 ? 0 : e.hp}/${e.max} · ${hc.style.name} (${hc.type}) ${Math.round(heroHitChance(hc, m) * 100)}% · max ${hc.maxHit}</div><div style="color:var(--dim)">Defence: stab ${m.defB.stab} · slash ${m.defB.slash} · crush ${m.defB.crush}${m.boss ? ' · <b style="color:#ff9d2e">BOSS</b>' : ''}</div><div class="drops">Drops ${drops}</div></div>`;
     } else {
       const n = NODES[e.kind], lv = g.level(n.skill), ys = nodeYields(n);

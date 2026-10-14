@@ -1,8 +1,9 @@
 // Procedural cartoon art (canvas 2D, no image assets). Everything is drawn with origin at the feet, 1 unit = 1px at scale 1.
 import { ITEMS, TIERS } from './data.js';
 import { LOOKS } from './save.js';
+import { MONSTER_ART, MON_HEIGHT } from './monsters.js';
 
-const OUT = '#2b2233';
+export const OUT = '#2b2233';
 export function shade(col, f) {
   let r, g, b;
   if (col[0] === '#') { const n = parseInt(col.length === 4 ? col.replace(/./g, (m, i) => (i ? m + m : m)).slice(1) : col.slice(1), 16); r = n >> 16; g = (n >> 8) & 255; b = n & 255; }
@@ -125,7 +126,7 @@ export function tabIcon(name) {
 const lerp = (a, b, u) => a + (b - a) * Math.max(0, Math.min(1, u));
 const ease = (u) => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
 /** keyframe interpolation: kf(p, [[p0, v0], [p1, v1], ...]) with smoothing */
-function kf(p, pts) {
+export function kf(p, pts) {
   if (p <= pts[0][0]) return pts[0][1];
   for (let i = 1; i < pts.length; i++) if (p <= pts[i][0]) return lerp(pts[i - 1][1], pts[i][1], ease((p - pts[i - 1][0]) / (pts[i][0] - pts[i - 1][0])));
   return pts[pts.length - 1][1];
@@ -140,7 +141,7 @@ export const ATTACK_ANIMS = {
 const WEAPON_ANIM_OF_TYPE = { stab: 'stab', slash: 'slash', crush: 'crush' };
 
 /** limb helper: pivot at (px,py), swing forward by `ang` radians */
-function limb(ctx, px, py, ang, fn) { ctx.save(); ctx.translate(px, py); ctx.rotate(-ang); fn(); ctx.restore(); }
+export function limb(ctx, px, py, ang, fn) { ctx.save(); ctx.translate(px, py); ctx.rotate(-ang); fn(); ctx.restore(); }
 function skinBlock(ctx, x, y, w, h, skin) { rrect(ctx, x, y, w, h, 2, skin); rrect(ctx, x, y + h * 0.55, w, h * 0.45, 2, shade(skin, 0.86), null); }
 
 /** Blocky RuneScape-style adventurer (original art). Origin = feet. Faces +x (mirrored by `dir`). */
@@ -155,11 +156,12 @@ export function drawHero(ctx, x, y, s, o) {
   const breathe = Math.sin(t * 2.2) * 0.8;
   let mode = null, wGlyph = wi ? wi.art : null, wColor = wi ? [wi.c, wi.d] : null, bothHands = two;
   if (walk) { const sw = Math.sin(t * 10); legF = sw * 0.62; legB = -sw * 0.62; armF = -sw * 0.55; armB = sw * 0.55; bodyDy = -Math.abs(Math.cos(t * 10)) * 2.2; wRot = -1.0; }
-  if (state === 'attack' && swingP != null) { mode = bothHands ? 'twoH' : WEAPON_ANIM_OF_TYPE[atkType] || 'slash'; }
+  if (state === 'attack' && swingP != null) { mode = atkType === 'ranged' ? 'shoot' : atkType === 'magic' ? 'cast' : bothHands ? 'twoH' : WEAPON_ANIM_OF_TYPE[atkType] || 'slash'; }
   else if (state === 'gather' && swingP != null) {
     wGlyph = tool === 'cage' ? 'pot' : tool; const ti = toolId && ITEMS[toolId]; wColor = ti ? [ti.c, ti.d] : ['#c9a46a', '#7a5530']; bothHands = false;
     mode = { pickaxe: 'crush', axe: 'slash', net: 'net', rod: 'rod', harpoon: 'stab', cage: 'net' }[tool] || 'stab';
   } else if (state === 'gather') { wGlyph = tool === 'cage' ? 'pot' : tool; const ti = toolId && ITEMS[toolId]; wColor = ti ? [ti.c, ti.d] : ['#c9a46a', '#7a5530']; if (tool === 'rod') { armF = 1.1; wRot = -0.1; } }
+  if (wi?.wk === 'bow' && !mode && !walk && state !== 'gather') { armF = 0.5; wRot = -Math.PI / 2; } // bow held ready
   if (pose) {
     const p = pose.p;
     if (pose.name === 'eat') { armF = kf(p, [[0, 0.3], [0.25, 2.5], [0.7, 2.45], [1, 0.3]]); lookDown = 0; item = pose.item || 'fish'; itemSc = 0.45; wGlyph = null; lean = Math.sin(p * 20) * 0.8; }
@@ -170,10 +172,12 @@ export function drawHero(ctx, x, y, s, o) {
   const ap = pose && (pose.name === 'smith') ? pose.p : swingP;
   if (mode && ap != null) {
     if (ATTACK_ANIMS[mode]) { const A = ATTACK_ANIMS[mode]; armF = kf(ap, A.arm); push = kf(ap, A.push); lean = kf(ap, A.lean); wRot = lerp(-1.15, 0, ap < 0.5 ? ap / 0.3 : 1 - (ap - 0.62) / 0.38); trail = A.trail && ap > A.trail[0] && ap < A.trail[1] ? { u: (ap - A.trail[0]) / (A.trail[1] - A.trail[0]) } : null; if (mode === 'stab') wRot = lerp(-1.15, 0.0, kf(ap, [[0, 0], [0.3, 1], [0.7, 1], [1, 0]])); }
+    else if (mode === 'shoot') { armF = kf(ap, [[0, 0.6], [0.2, 1.55], [0.8, 1.55], [1, 0.6]]); wRot = -Math.PI / 2; bothHands = false; armB = kf(ap, [[0, 0.3], [0.2, 1.35], [0.55, 1.15], [0.62, 1.5], [1, 0.3]]); lean = kf(ap, [[0, 0], [0.55, -2], [0.65, 1], [1, 0]]); }
+    else if (mode === 'cast') { armF = kf(ap, [[0, 0.4], [0.35, 2.6], [0.6, 1.45], [1, 0.4]]); wRot = kf(ap, [[0, -1.15], [0.35, -0.2], [0.6, -0.1], [1, -1.15]]); bothHands = false; armB = kf(ap, [[0, 0], [0.4, 1.2], [0.6, 0.9], [1, 0]]); lean = kf(ap, [[0, 0], [0.35, -3], [0.6, 4], [1, 0]]); }
     else if (mode === 'net') { armF = kf(ap, [[0, 0.9], [0.4, 1.45], [0.7, 1.0], [1, 0.9]]); wRot = -0.5; lean = kf(ap, [[0, 0], [0.4, 3], [1, 0]]); }
     else if (mode === 'rod') { armF = kf(ap, [[0, 1.1], [0.25, 2.0], [0.5, 0.9], [1, 1.1]]); wRot = kf(ap, [[0, -0.2], [0.25, 0.6], [0.5, -0.5], [1, -0.2]]); lean = kf(ap, [[0, 0], [0.5, 3], [1, 0]]); }
     if (bothHands) armB = armF * 0.85;
-    else if (!pose) armB = lerp(-0.1, 0.5, 0.5 + 0.5 * Math.sin(ap * 6.28));
+    else if (!pose && mode !== 'shoot' && mode !== 'cast') armB = lerp(-0.1, 0.5, 0.5 + 0.5 * Math.sin(ap * 6.28));
   }
   if (hurt > 0) { lean -= 5 * Math.min(1, hurt / 0.2); armF -= 0.2; }
   const hip = -24, sho = -49;
@@ -236,6 +240,8 @@ export function drawHero(ctx, x, y, s, o) {
       ctx.rotate(Math.PI + wRot);
       const sc = heldGlyph === 'pot' ? 0.6 : 0.85; ctx.scale(sc, sc); ctx.translate(0, -GRIP[heldGlyph]);
       drawGlyph(ctx, heldGlyph, wColor?.[0] || '#aab3bf', wColor?.[1] || '#5f6875');
+      if (mode === 'cast' && ap > 0.25 && ap < 0.7) { ctx.globalAlpha = 0.6; circle(ctx, 0, -26, 10 + Math.sin(ap * 30) * 2, '#bfe0ff', null); ctx.globalAlpha = 1; }
+      if (mode === 'shoot' && ap > 0.15 && ap < 0.6) { ctx.strokeStyle = '#f3ead2'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-1, -12); ctx.lineTo(-12, 0); ctx.lineTo(-1, 12); ctx.stroke(); ctx.fillStyle = '#8a5a30'; ctx.fillRect(-13, -1, 22, 2); }
     } else if (item) { ctx.rotate(Math.PI / 2); ctx.scale(itemSc, itemSc); drawGlyph(ctx, item === 'meat' ? 'meat' : 'fish', pose?.c || '#e8a35a'); }
   });
   ctx.restore();
@@ -261,7 +267,7 @@ export function drawMonster(ctx, kind, x, y, s, o) {
   const bob = Math.sin(t * 4 + seed) * 1.2, ph = swing == null ? 0 : Math.sin(swing * Math.PI); // 0..1..0 over the attack
   const lunge = ph * 9;
   ctx.save(); ctx.translate(x, y); ctx.scale(s * dir, s);
-  const big = kind === 'hill_giant' ? 1.55 : kind === 'alpha_wolf' ? 1.45 : 1;
+  const big = Math.max(1, (MON_HEIGHT[kind] || 60) / 75);
   ellipse(ctx, 0, 0, 20 * big, 4.5 * big, 'rgba(0,0,0,.25)', null);
   if (hit > 0) { ctx.translate((Math.random() - 0.5) * 3, 0); ctx.rotate(-0.05); }
   ctx.translate(lunge * big, 0);
@@ -284,121 +290,10 @@ export function drawMonster(ctx, kind, x, y, s, o) {
     const hx = 25 + ph * 6, hy = -34 - bob + ph * 5 + 3;
     rrect(ctx, hx - 6, hy - 9, 17, 17, 4, '#f1ecdd'); rrect(ctx, hx + 4, hy - 1, 9, 8, 3, '#e8a3a0'); rrect(ctx, hx - 1, hy - 6, 3, 3, 1, OUT, null); rrect(ctx, hx + 6, hy + 2, 1.5, 2, 0.7, '#8a4a48', null);
     poly(ctx, [[hx - 5, hy - 9], [hx - 9, hy - 16], [hx - 2, hy - 10]], '#efe3b8'); poly(ctx, [[hx + 3, hy - 9], [hx + 6, hy - 16], [hx + 8, hy - 9]], '#efe3b8'); rrect(ctx, hx - 9, hy - 6, 5, 6, 2, '#2c2c34', null);
-  } else if (kind === 'goblin' || kind === 'hill_giant') {
-    const g = kind === 'hill_giant', skin = g ? '#c9a27a' : color, tun = g ? '#7a5a38' : '#8a5a30', st = Math.sin(t * 4 + seed) * 0.5;
-    rrect(ctx, -9, -17, 8, 17, 2, dk(skin, 0.85)); rrect(ctx, 1, -17, 8, 17, 2, skin); rrect(ctx, -10, -3, 10, 4, 1.5, '#3a2614', null); rrect(ctx, 0, -3, 10, 4, 1.5, '#3a2614', null);
-    rrect(ctx, -11, -41 - bob, 22, 26, 3, tun); rrect(ctx, -11, -28 - bob, 22, 4, 1, '#3a2614', null); rrect(ctx, -11, -41 - bob, 6, 26, 2, 'rgba(0,0,0,.15)', null);
-    if (g) rrect(ctx, -11, -18, 22, 9, 2, '#8a6a42');
-    // head
-    const hy = -42 - bob; rrect(ctx, -9, hy - 17, 19, 17, 3, skin); rrect(ctx, -9, hy - 7, 19, 7, 3, dk(skin, 0.88), null);
-    poly(ctx, [[-9, hy - 11], [-22, hy - 17], [-9, hy - 5]], dk(skin, 0.9)); poly(ctx, [[10, hy - 11], [21, hy - 16], [10, hy - 6]], skin);
-    rrect(ctx, 2, hy - 11, 4, 4, 1, '#fff', null); rrect(ctx, 3.5, hy - 10, 2.2, 3, 0.8, '#c0231a', null); rrect(ctx, 8, hy - 8, 4, 4, 1.5, dk(skin, 0.8), null);
-    rrect(ctx, 0, hy - 3, 9, 3, 1, OUT, null); rrect(ctx, 2, hy - 3, 2, 2, 0.5, '#fff', null); rrect(ctx, 6, hy - 3, 2, 2, 0.5, '#fff', null);
-    if (g) rrect(ctx, -10, hy - 20, 20, 5, 2, '#4a3220', null);
-    // club: raised for attack
-    const ang = swing == null ? 0.7 + st : kf(swing, [[0, 0.6], [0.35, 2.6], [0.55, 2.6], [0.7, 0.4], [1, 0.6]]);
-    limb(ctx, 11, -38 - bob, ang, () => { rrect(ctx, -3.5, -2, 7, 20, 2.5, skin); rrect(ctx, -3.5, 14, 8, 6, 2, dk(skin, 0.8), null); ctx.translate(0, 19); ctx.rotate(Math.PI - 0.1 - (swing == null ? 1.1 : 0)); ctx.scale(g ? 1.0 : 0.62, g ? 1.0 : 0.62); ctx.translate(0, -12); drawGlyph(ctx, 'mace', g ? '#6a5a4a' : '#7a7f8a', '#3a2f2a'); });
-    rrect(ctx, -15, -37 - bob, 6, 18, 2, dk(skin, 0.85));
-  } else if (kind === 'wolf' || kind === 'alpha_wolf') {
-    const a = kind === 'alpha_wolf', fur = a ? '#454a56' : color, fd = dk(fur, 0.78), st = Math.sin(t * 5 + seed);
-    for (const [lx, far] of [[-21, 1], [-11, 0], [9, 1], [19, 0]]) rrect(ctx, lx - 3, -17 - (swing != null ? 0 : 0), 6.5, 17, 2, far ? fd : fur);
-  } else if (kind === 'bat') {
-    const flap = Math.sin(t * 8 + seed) * 0.4;
-    ctx.save(); ctx.translate(-6, -20 - bob); ctx.rotate(flap); poly(ctx, [[0, 0], [-16, -8], [-10, 4]], '#4a3a6a'); ctx.restore();
-    ctx.save(); ctx.translate(6, -20 - bob); ctx.rotate(-flap); poly(ctx, [[0, 0], [16, -8], [10, 4]], '#5a4a7a'); ctx.restore();
-    ellipse(ctx, 0, -18 - bob, 8, 6, '#3a2a5a'); circle(ctx, -2, -20 - bob, 1.5, '#ff3a2a', null); circle(ctx, 2, -20 - bob, 1.5, '#ff3a2a', null);
-  } else if (kind === 'giant_rat') {
-    ellipse(ctx, 0, -10 - bob, 16, 8, '#8a7a6a'); ellipse(ctx, 8, -12 - bob, 8, 5, '#9a8a7a');
-    circle(ctx, 12, -14 - bob, 1.5, '#2a2a2a', null); poly(ctx, [[-10, -8 - bob], [-16, -4 - bob], [-8, -6 - bob]], '#7a6a5a');
-    rrect(ctx, -6, -6, 3, 6, 1, '#6a5a4a'); rrect(ctx, 4, -6, 3, 6, 1, '#7a6a5a');
-  } else if (kind === 'al_kharid_warrior') {
-    rrect(ctx, -7, -16, 6, 16, 2, '#c8a050'); rrect(ctx, 1, -16, 6, 16, 2, '#d8b060');
-    rrect(ctx, -11, -40 - bob, 22, 24, 3, '#e8c070'); rrect(ctx, -11, -28 - bob, 22, 4, 1, '#b89040', null);
-    const hy = -42 - bob; rrect(ctx, -8, hy - 14, 16, 14, 3, '#e8d0a0'); rrect(ctx, -5, hy - 8, 3, 2, 1, '#2a2a2a', null); rrect(ctx, 3, hy - 8, 3, 2, 1, '#2a2a2a', null);
-    poly(ctx, [[-8, hy - 14], [0, hy - 22], [8, hy - 14]], '#f0e0b0');
-    rrect(ctx, 10, -36 - bob, 3, 18, 1, '#8a6a3a'); poly(ctx, [[11, -38 - bob], [11, -48 - bob], [16, -42 - bob]], '#d0d0d8');
-  } else if (kind === 'white_knight' || kind === 'guard') {
-    const white = kind === 'white_knight', armor = white ? '#f0f0f0' : '#6a8a4a';
-    rrect(ctx, -7, -16, 6, 16, 2, white ? '#d0d0d0' : '#5a7a3a'); rrect(ctx, 1, -16, 6, 16, 2, armor);
-    rrect(ctx, -11, -40 - bob, 22, 24, 3, armor); rrect(ctx, -11, -28 - bob, 22, 4, 1, white ? '#c0c0c0' : '#4a6a3a', null);
-    const hy = -42 - bob; rrect(ctx, -8, hy - 14, 16, 14, 3, white ? '#e8e8e8' : '#7a9a5a'); rrect(ctx, -5, hy - 8, 3, 2, 1, '#2a2a2a', null); rrect(ctx, 3, hy - 8, 3, 2, 1, '#2a2a2a', null);
-    if (white) poly(ctx, [[-8, hy - 14], [0, hy - 24], [8, hy - 14]], '#f0f0f0');
-    rrect(ctx, 10, -36 - bob, 3, 18, 1, '#8a6a3a'); poly(ctx, [[11, -38 - bob], [11, -50 - bob], [16, -42 - bob]], '#d0d0d8');
-  } else if (kind === 'thief' || kind === 'pirate') {
-    const pirate = kind === 'pirate', cloth = pirate ? '#8a4a3a' : '#5a4a3a';
-    rrect(ctx, -6, -14, 5, 14, 2, '#4a3a2a'); rrect(ctx, 1, -14, 5, 14, 2, cloth);
-    rrect(ctx, -10, -36 - bob, 20, 22, 3, cloth); rrect(ctx, -10, -24 - bob, 20, 4, 1, '#3a2a1a', null);
-    const hy = -38 - bob; rrect(ctx, -7, hy - 12, 14, 12, 3, '#e8d0b0'); rrect(ctx, -4, hy - 6, 3, 2, 1, '#2a2a2a', null); rrect(ctx, 2, hy - 6, 3, 2, 1, '#2a2a2a', null);
-    if (pirate) poly(ctx, [[-7, hy - 12], [0, hy - 20], [7, hy - 12]], '#4a2a1a');
-  } else if (kind === 'seagull') {
-    const flap = Math.sin(t * 6 + seed) * 0.3;
-    ctx.save(); ctx.translate(-4, -16 - bob); ctx.rotate(flap); poly(ctx, [[0, 0], [-12, -4], [-6, 2]], '#e8e8e8'); ctx.restore();
-    ctx.save(); ctx.translate(4, -16 - bob); ctx.rotate(-flap); poly(ctx, [[0, 0], [12, -4], [6, 2]], '#f0f0f0'); ctx.restore();
-    ellipse(ctx, 0, -14 - bob, 6, 4, '#e0e0e0'); circle(ctx, 2, -15 - bob, 1, '#2a2a2a', null);
-  } else if (kind === 'chaos_elemental') {
-    const pulse = 1 + Math.sin(t * 3 + seed) * 0.1;
-    ctx.scale(pulse, pulse);
-    circle(ctx, 0, -30 - bob, 18, '#6a3a6a'); circle(ctx, 0, -30 - bob, 12, '#8a5a8a', null);
-    circle(ctx, -6, -34 - bob, 3, '#ff3a2a', null); circle(ctx, 6, -34 - bob, 3, '#ff3a2a', null);
-    for (let i = 0; i < 6; i++) { const a = (t + i) * 0.8; circle(ctx, Math.cos(a) * 22, -30 - bob + Math.sin(a) * 16, 3, '#4a2a4a', null); }
-  } else if (kind === 'skeleton') {
-    rrect(ctx, -6, -14, 5, 14, 2, '#e8e0d0'); rrect(ctx, 1, -14, 5, 14, 2, '#d8d0c0');
-    rrect(ctx, -10, -36 - bob, 20, 22, 3, '#f0e8d8'); rrect(ctx, -8, -32 - bob, 16, 4, 1, '#c8c0b0', null);
-    const hy = -38 - bob; rrect(ctx, -8, hy - 14, 16, 14, 3, '#f0e8d8'); rrect(ctx, -6, hy - 8, 4, 3, 1, '#2a2a2a', null); rrect(ctx, 2, hy - 8, 4, 3, 1, '#2a2a2a', null);
-    rrect(ctx, -4, hy - 2, 8, 2, 1, '#c8c0b0', null);
-  } else if (kind === 'zombie') {
-    rrect(ctx, -7, -14, 6, 14, 2, '#5a6a4a'); rrect(ctx, 1, -14, 6, 14, 2, '#6a7a5a');
-    rrect(ctx, -11, -38 - bob, 22, 24, 3, '#6a8a5a'); rrect(ctx, -11, -26 - bob, 22, 4, 1, '#4a5a3a', null);
-    const hy = -40 - bob; rrect(ctx, -9, hy - 14, 18, 14, 3, '#7a9a6a'); rrect(ctx, -5, hy - 7, 3, 3, 1, '#2a2a2a', null); rrect(ctx, 3, hy - 7, 3, 3, 1, '#2a2a2a', null);
-    rrect(ctx, -6, hy - 1, 10, 3, 1, '#c8a8a0', null);
-  } else if (kind === 'imp') {
-    rrect(ctx, -5, -10, 4, 10, 2, '#d8453c'); rrect(ctx, 1, -10, 4, 10, 2, '#c8352c');
-    rrect(ctx, -8, -26 - bob, 16, 16, 3, '#e85545');
-    const hy = -28 - bob; rrect(ctx, -7, hy - 10, 14, 10, 3, '#f06555'); poly(ctx, [[-7, hy - 6], [-14, hy - 14], [-7, hy - 2]], '#d8453c'); poly(ctx, [[7, hy - 6], [14, hy - 14], [7, hy - 2]], '#e85545');
-    rrect(ctx, -4, hy - 5, 3, 2, 1, '#2a2a2a', null); rrect(ctx, 2, hy - 5, 3, 2, 1, '#2a2a2a', null);
-  } else if (kind === 'scorpion') {
-    ellipse(ctx, 0, -12 - bob, 22, 10, '#c8a050'); ellipse(ctx, 0, -10 - bob, 16, 7, '#d8b060', null);
-    for (const lx of [-12, -6, 0, 6, 12]) rrect(ctx, lx - 1.5, -6, 3, 6, 1, '#b89040');
-    poly(ctx, [[0, -18 - bob], [-4, -32 - bob], [4, -32 - bob]], '#a08030'); circle(ctx, 0, -34 - bob, 3, '#d8453c');
-  } else if (kind === 'wizard' || kind === 'dark_wizard') {
-    const dark = kind === 'dark_wizard', robe = dark ? '#4a3a6a' : '#6a6ae8', skin = '#e8d0b0';
-    rrect(ctx, -8, -16, 7, 16, 2, dark ? '#3a2a5a' : '#5a5ad8'); rrect(ctx, 1, -16, 7, 16, 2, robe);
-    rrect(ctx, -12, -42 - bob, 24, 26, 4, robe); rrect(ctx, -12, -30 - bob, 24, 4, 1, dark ? '#2a1a4a' : '#4a4ac8', null);
-    const hy = -44 - bob; rrect(ctx, -8, hy - 14, 16, 14, 3, skin); rrect(ctx, -5, hy - 8, 3, 2, 1, '#2a2a2a', null); rrect(ctx, 3, hy - 8, 3, 2, 1, '#2a2a2a', null);
-    poly(ctx, [[-8, hy - 14], [0, hy - 28], [8, hy - 14]], dark ? '#2a1a4a' : '#5a5ad8');
-    rrect(ctx, 10, -38 - bob, 3, 20, 1, '#8a6a4a'); circle(ctx, 12, -40 - bob, 4, dark ? '#6a3a8a' : '#a0d0e8');
-  } else if (kind === 'moss_giant' || kind === 'fire_giant') {
-    const fire = kind === 'fire_giant', skin = fire ? '#d8453c' : '#6a8a5a', scale = 1.4;
-    ctx.scale(scale, scale);
-    rrect(ctx, -12, -20, 10, 20, 3, dk(skin, 0.85)); rrect(ctx, 2, -20, 10, 20, 3, skin);
-    rrect(ctx, -14, -50 - bob, 28, 30, 4, dk(skin, 0.9));
-    const hy = -52 - bob; rrect(ctx, -11, hy - 18, 22, 18, 4, skin); rrect(ctx, -6, hy - 10, 4, 3, 1, '#2a2a2a', null); rrect(ctx, 4, hy - 10, 4, 3, 1, '#2a2a2a', null);
-    if (fire) { circle(ctx, -8, hy - 6, 3, '#ff7a1e', null); circle(ctx, 6, hy - 4, 2.5, '#ffd34a', null); }
-    else { rrect(ctx, -10, hy - 20, 20, 4, 2, '#4a6a3a', null); }
-  } else if (kind === 'greater_demon' || kind === 'black_demon') {
-    const black = kind === 'black_demon', skin = black ? '#2a1a1a' : '#8a2a2a', scale = black ? 1.5 : 1.3;
-    ctx.scale(scale, scale);
-    rrect(ctx, -10, -18, 8, 18, 3, dk(skin, 0.8)); rrect(ctx, 2, -18, 8, 18, 3, skin);
-    rrect(ctx, -13, -46 - bob, 26, 28, 4, skin);
-    const hy = -48 - bob; rrect(ctx, -10, hy - 16, 20, 16, 3, dk(skin, 1.1)); poly(ctx, [[-10, hy - 10], [-18, hy - 22], [-8, hy - 6]], dk(skin, 0.9)); poly(ctx, [[10, hy - 10], [18, hy - 22], [8, hy - 6]], skin);
-    rrect(ctx, -5, hy - 8, 3, 3, 1, '#ff3a2a', null); rrect(ctx, 4, hy - 8, 3, 3, 1, '#ff3a2a', null);
-  } else if (kind.includes('dragon')) {
-    const col = color || '#3a8a4a', scale = 1.6;
-    ctx.scale(scale, scale);
-    ellipse(ctx, 0, -20 - bob, 30, 16, col); ellipse(ctx, 0, -18 - bob, 22, 10, shade(col, 1.15), null);
-    poly(ctx, [[-8, -22 - bob], [-20, -38 - bob], [-4, -24 - bob]], shade(col, 0.85)); poly(ctx, [[8, -22 - bob], [20, -38 - bob], [4, -24 - bob]], col);
-    const hx = 18, hy = -24 - bob; rrect(ctx, hx - 6, hy - 8, 14, 10, 3, col); rrect(ctx, hx + 2, hy - 4, 3, 2, 1, '#2a2a2a', null);
-    poly(ctx, [[hx + 6, hy - 2], [hx + 16, hy], [hx + 6, hy + 2]], shade(col, 0.9));
-    poly(ctx, [[-10, -28 - bob], [-30, -50 - bob], [-5, -30 - bob]], shade(col, 0.75)); poly(ctx, [[10, -28 - bob], [30, -50 - bob], [5, -30 - bob]], shade(col, 0.85));
-  } else {
-    rrect(ctx, -26, -37 - bob, 52, 21, 6, fur); rrect(ctx, -26, -24 - bob, 52, 8, 4, fd, null); rrect(ctx, -26, -37 - bob, 52, 5, 3, shade(fur, 1.15), null);
-    ctx.save(); ctx.translate(-26, -33 - bob); ctx.rotate(-0.5 + st * 0.12); rrect(ctx, -22, -5, 24, 9, 4, fd); rrect(ctx, -22, -4, 7, 7, 3, shade(fur, 0.6), null); ctx.restore();
-    const hx = 27 + ph * 8, hy = -40 - bob + ph * 4;
-    rrect(ctx, hx - 9, hy - 10, 20, 19, 4, fur); rrect(ctx, hx + 7, hy - 2, 17, 9, 3, shade(fur, 1.08)); rrect(ctx, hx + 21, hy - 1, 4, 4, 1, OUT, null);
-    if (ph > 0.4) { poly(ctx, [[hx + 8, hy + 7], [hx + 22, hy + 7], [hx + 14, hy + 13]], '#fff', OUT, 1); } else rrect(ctx, hx + 9, hy + 6, 14, 2, 1, '#5a1a1a', null);
-    poly(ctx, [[hx - 7, hy - 10], [hx - 4, hy - 21], [hx + 3, hy - 10]], fd); poly(ctx, [[hx + 2, hy - 10], [hx + 6, hy - 20], [hx + 10, hy - 10]], fur);
-    rrect(ctx, hx + 3, hy - 6, 5, 4, 1, a ? '#ff4d4d' : '#f7c948', null); rrect(ctx, hx + 4.5, hy - 5.5, 1.8, 3, 0.7, OUT, null);
-    if (a) { poly(ctx, [[hx - 2, hy - 10], [hx + 6, hy + 8]], null, '#9a2a2a', 2); rrect(ctx, -26, -30 - bob, 5, 12, 2, '#6a7080', null); }
+  } else if (MONSTER_ART[kind]) {
+    MONSTER_ART[kind](ctx, { t, swing, ph, bob, seed, color });
+  } else { // unknown kind: a plain blob so new data never crashes the renderer
+    ellipse(ctx, 0, -18 - bob, 18, 16, color); circle(ctx, 8, -24 - bob, 2.5, '#fff');
   }
   ctx.restore();
 }

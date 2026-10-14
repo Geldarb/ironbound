@@ -1,5 +1,5 @@
 // Game model: character state + the traversable-area simulation. No DOM here (the UI listens to `game.on`).
-import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood, stanceXp, PRAYERS, PRAYER_BY_ID, BONE_XP, BONES, SLAYER_TASKS, SPELLS, SPELL_BY_ID, ACHIEVEMENTS, styleXp, ARROW_IDS } from './data.js';
+import { SKILL_IDS, ITEMS, MONSTERS, NODES, AREAS, RECIPE_BY_ID, STATIONS, SLOT_IDS, BAG_SLOTS, SHOP_BUY, SELL_RATE, STANCE_BY_ID, isStackable, XP_RATE, nodeYields, burnChance, isFood, stanceXp, PRAYERS, PRAYER_BY_ID, BONE_XP, BONES, SLAYER_TASKS, SPELLS, SPELL_BY_ID, ACHIEVEMENTS, styleXp, ARROW_IDS, monsterStyle, PROTECT } from './data.js';
 import { levelForXp } from './xp.js';
 import { heroCombat, heroHitChance, monsterHitChance, combatLevel } from './combat.js';
 import { sumMods, rollEnchant, rollCost, nextPity, enchantCategory, gemFromMod, canCombineGems, combineGems as combineGemData, maxMods, MODS, modText } from './enchant.js';
@@ -778,10 +778,9 @@ export class Game {
     m.cd -= dt;
     if (m.cd <= 0 && m.dead <= 0) {
       m.cd = def.interval; m.swing = 0.3;
-      const hit = this.rng() < monsterHitChance(hc, def);
-      let dmg = hit ? Math.floor(this.rng() * (def.maxHit + 1)) : 0;
-      // Protect prayers
-      if (this.data.activePrayers.includes('protect_from_melee') && this.prayerPoints > 0) dmg = Math.floor(dmg * 0.5); // all monsters are melee for now
+      const r = this.monsterAttack(def);
+      let dmg = r.dmg;
+      this.emit('mattack', { id: m.id, x: m.x, style: r.style, proj: r.proj, blocked: r.blocked });
       this.data.hp = Math.max(0, this.data.hp - dmg);
       if (dmg > 0) h.hurt = 0.3;
       this.emit('hit', { who: 'hero', x: h.x, dmg, miss: dmg === 0 });
@@ -791,6 +790,21 @@ export class Game {
       if (this.data.hp < this.maxHp * RETREAT_FRAC && !(a.on && this.foodCount > 0)) { this.toast('Low HP - retreating'); this.target = null; h.state = 'idle'; this.emit('target'); return false; }
     }
     return true;
+  }
+  /** one monster attack roll: OSRS-like styles. Dragonfire ignores accuracy; anti-dragon shield and Protect from Magic cut it.
+   *  Protect from Melee/Missiles/Magic fully block the matching normal attack. */
+  monsterAttack(def) {
+    const hc = this.combat, pray = (id) => this.prayerPoints > 0 && this.data.activePrayers.includes(id);
+    if (def.fire && this.rng() < def.fire.chance) {
+      let dmg = Math.floor(this.rng() * (def.fire.max + 1));
+      if (ITEMS[this.data.equip.shield]?.antifire) dmg = Math.floor(dmg * 0.15);
+      if (pray('protect_from_magic')) dmg = Math.floor(dmg * 0.6);
+      return { dmg, style: 'dragonfire', proj: 'dragonfire', blocked: false };
+    }
+    const style = monsterStyle(def), proj = def.proj || (style === 'ranged' ? 'arrow' : style === 'magic' ? 'orb' : null);
+    if (pray(PROTECT[style])) return { dmg: 0, style, proj, blocked: true };
+    const hit = this.rng() < monsterHitChance(hc, def);
+    return { dmg: hit ? Math.floor(this.rng() * (def.maxHit + 1)) : 0, style, proj, blocked: false };
   }
   hitMonster(m, dmg, o = {}) {
     const def = MONSTERS[m.kind];

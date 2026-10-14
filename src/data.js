@@ -215,6 +215,7 @@ for (const [id, name, c, v] of [['air_rune', 'Air rune', '#d8eef8', 4], ['mind_r
 add('rune_essence', { name: 'Rune essence', stack: true, value: 2, art: 'ore', c: '#d8d0b8' });
 add('ashes', { name: 'Ashes', stack: true, value: 2, art: 'ore', c: '#8a8a8a' });
 add('steel_studs', { name: 'Steel studs', stack: true, value: 30, art: 'bar', c: '#c9d6e3' });
+add('anti_dragon_shield', { name: 'Anti-dragon shield', stack: false, value: 20, art: 'shield', c: '#c9a46a', d: '#6a4a2a', slot: 'shield', req: { skill: 'defence', level: 1 }, antifire: true, bonus: { atk: 0, str: 0, def: 7, a: {} } });
 add('bones', { name: 'Bones', stack: true, value: 1, art: 'bones', c: '#f3ead2' });
 add('big_bones', { name: 'Big bones', stack: true, value: 8, art: 'bones', c: '#e8dcc0' });
 add('bat_bones', { name: 'Bat bones', stack: true, value: 3, art: 'bones', c: '#d8c8a8' });
@@ -339,15 +340,17 @@ export const MONSTERS = {
     drops: [{ id: 'wolf_bones', p: 1, n: [1, 1] }, { id: 'wolf_pelt', p: 1, n: [1, 2] }, { id: 'coins', p: 1, n: [60, 160] }, { id: 'iron_2h', p: 0.15, n: [1, 1] }, { id: 'iron_longsword', p: 0.15, n: [1, 1] }, { id: 'steel_scimitar', p: 0.06, n: [1, 1] }] },
   hill_giant: { name: 'Hill giant', level: 28, hp: 40, atk: 25, def: 25, maxHit: 7, interval: 2.1, color: '#c9a27a', family: 'giant', defB: { stab: 25, slash: 30, crush: 0 }, epChance: 0.2,
     drops: [{ id: 'big_bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.9, n: [20, 80] }, { id: 'steel_sword', p: 0.03, n: [1, 1] }, { id: 'steel_warhammer', p: 0.03, n: [1, 1] }, { id: 'steel_2h', p: 0.02, n: [1, 1] }, { id: 'steel_halberd', p: 0.02, n: [1, 1] }, { id: 'iron_battleaxe', p: 0.04, n: [1, 1] }, { id: 'coal', p: 0.3, n: [1, 3] }] },
+  goblin_archer: { name: 'Goblin archer', style: 'ranged', proj: 'arrow', level: 5, hp: 8, atk: 4, def: 2, maxHit: 2, interval: 2.0, color: '#6fa83a', family: 'humanoid', defB: { stab: 0, slash: 4, crush: 6 }, epChance: 0.06,
+    drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.6, n: [3, 12] }, { id: 'bronze_arrows', p: 0.5, n: [3, 10] }, { id: 'feather', p: 0.3, n: [2, 6] }, { id: 'shortbow', p: 0.03, n: [1, 1] }] },
   bat: { name: 'Bat', level: 5, hp: 6, atk: 3, def: 3, maxHit: 1, interval: 1.6, color: '#5a4a6a', family: 'beast', defB: { stab: 0, slash: 0, crush: 0 }, epChance: 0.04,
     drops: [{ id: 'bat_bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.4, n: [1, 4] }] },
-  green_dragon: { name: 'Green dragon', level: 79, hp: 80, atk: 68, def: 68, maxHit: 12, interval: 2.4, color: '#3a8a4a', family: 'beast', defB: { stab: 40, slash: 40, crush: 40 }, boss: true, respawn: 60, epFlat: 15, epChance: 0,
+  green_dragon: { name: 'Green dragon', style: 'melee', fire: { chance: 0.3, max: 30 }, level: 79, hp: 80, atk: 68, def: 68, maxHit: 12, interval: 2.4, color: '#3a8a4a', family: 'beast', defB: { stab: 40, slash: 40, crush: 40 }, boss: true, respawn: 60, epFlat: 15, epChance: 0,
     drops: [{ id: 'dragon_bones', p: 1, n: [1, 1] }, { id: 'coins', p: 1, n: [200, 500] }, { id: 'steel_scimitar', p: 0.1, n: [1, 1] }] },
   skeleton: { name: 'Skeleton', level: 22, hp: 25, atk: 18, def: 15, maxHit: 4, interval: 1.8, color: '#e8e0d0', family: 'undead', defB: { stab: 10, slash: 15, crush: 5 }, epChance: 0.08,
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.7, n: [10, 40] }, { id: 'bronze_arrows', p: 0.3, n: [5, 15] }, { id: 'iron_arrows', p: 0.15, n: [3, 8] }] },
   zombie: { name: 'Zombie', level: 18, hp: 22, atk: 15, def: 12, maxHit: 3, interval: 1.8, color: '#6a8a5a', family: 'undead', defB: { stab: 5, slash: 10, crush: 8 }, epChance: 0.07,
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.6, n: [8, 30] }, { id: 'air_rune', p: 0.2, n: [3, 8] }, { id: 'mind_rune', p: 0.15, n: [2, 6] }] },
-  imp: { name: 'Imp', level: 5, hp: 8, atk: 4, def: 4, maxHit: 1, interval: 1.5, color: '#d8453c', family: 'beast', defB: { stab: 0, slash: 0, crush: 0 }, epChance: 0.05,
+  imp: { name: 'Imp', style: 'magic', proj: 'fire', level: 5, hp: 8, atk: 4, def: 4, maxHit: 1, interval: 1.5, color: '#d8453c', family: 'beast', defB: { stab: 0, slash: 0, crush: 0 }, epChance: 0.05,
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.5, n: [2, 8] }, { id: 'fire_rune', p: 0.25, n: [2, 5] }, { id: 'mind_rune', p: 0.2, n: [1, 4] }] },
   giant_rat: { name: 'Giant rat', level: 6, hp: 10, atk: 5, def: 4, maxHit: 1, interval: 1.6, color: '#8a7a6a', family: 'beast', defB: { stab: 0, slash: 2, crush: 0 }, epChance: 0.04,
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.4, n: [1, 5] }, { id: 'raw_rat', p: 0.5, n: [1, 1] }] },
@@ -355,9 +358,9 @@ export const MONSTERS = {
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.5, n: [5, 15] }] },
   al_kharid_warrior: { name: 'Al Kharid warrior', level: 9, hp: 19, atk: 7, def: 4, maxHit: 2, interval: 1.8, color: '#e8c070', family: 'humanoid', defB: { stab: 5, slash: 8, crush: 5 }, epChance: 0.07,
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.8, n: [10, 30] }, { id: 'bronze_scimitar', p: 0.05, n: [1, 1] }, { id: 'iron_scimitar', p: 0.02, n: [1, 1] }] },
-  wizard: { name: 'Wizard', level: 9, hp: 12, atk: 8, def: 5, maxHit: 3, interval: 2.0, color: '#6a6ae8', family: 'humanoid', defB: { stab: 0, slash: 0, crush: 0 }, epChance: 0.1,
+  wizard: { name: 'Wizard', style: 'magic', proj: 'water', level: 9, hp: 12, atk: 8, def: 5, maxHit: 3, interval: 2.0, color: '#6a6ae8', family: 'humanoid', defB: { stab: 0, slash: 0, crush: 0 }, epChance: 0.1,
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'air_rune', p: 0.6, n: [5, 12] }, { id: 'mind_rune', p: 0.5, n: [3, 8] }, { id: 'water_rune', p: 0.3, n: [2, 6] }, { id: 'coins', p: 0.4, n: [5, 20] }] },
-  dark_wizard: { name: 'Dark wizard', level: 20, hp: 24, atk: 16, def: 10, maxHit: 5, interval: 2.0, color: '#4a3a6a', family: 'humanoid', defB: { stab: 5, slash: 5, crush: 5 }, epChance: 0.15,
+  dark_wizard: { name: 'Dark wizard', style: 'magic', proj: 'fire', level: 20, hp: 24, atk: 16, def: 10, maxHit: 5, interval: 2.0, color: '#4a3a6a', family: 'humanoid', defB: { stab: 5, slash: 5, crush: 5 }, epChance: 0.15,
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'air_rune', p: 0.7, n: [8, 18] }, { id: 'mind_rune', p: 0.6, n: [5, 12] }, { id: 'earth_rune', p: 0.4, n: [4, 10] }, { id: 'fire_rune', p: 0.3, n: [3, 8] }, { id: 'chaos_rune', p: 0.15, n: [1, 3] }, { id: 'coins', p: 0.5, n: [15, 40] }] },
   moss_giant: { name: 'Moss giant', level: 42, hp: 60, atk: 30, def: 30, maxHit: 6, interval: 2.1, color: '#4a6a3a', family: 'giant', defB: { stab: 20, slash: 25, crush: 15 }, epChance: 0.12,
     drops: [{ id: 'big_bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.8, n: [30, 80] }, { id: 'steel_sword', p: 0.05, n: [1, 1] }, { id: 'steel_arrows', p: 0.2, n: [5, 15] }, { id: 'nature_rune', p: 0.15, n: [3, 8] }] },
@@ -367,11 +370,11 @@ export const MONSTERS = {
     drops: [{ id: 'ashes', p: 1, n: [1, 1] }, { id: 'coins', p: 0.8, n: [40, 120] }, { id: 'death_rune', p: 0.3, n: [3, 8] }, { id: 'rune_helm', p: 0.02, n: [1, 1] }] },
   black_demon: { name: 'Black demon', level: 172, hp: 157, atk: 145, def: 152, maxHit: 16, interval: 2.4, color: '#2a1a1a', family: 'beast', defB: { stab: 50, slash: 50, crush: 50 }, epChance: 0.25,
     drops: [{ id: 'ashes', p: 1, n: [1, 1] }, { id: 'coins', p: 0.9, n: [100, 300] }, { id: 'death_rune', p: 0.4, n: [5, 12] }, { id: 'rune_body', p: 0.015, n: [1, 1] }] },
-  steel_dragon: { name: 'Steel dragon', level: 246, hp: 160, atk: 210, def: 210, maxHit: 22, interval: 2.4, color: '#c9d6e3', family: 'beast', defB: { stab: 60, slash: 60, crush: 60 }, boss: true, respawn: 45, epFlat: 20, epChance: 0,
+  steel_dragon: { name: 'Steel dragon', style: 'melee', fire: { chance: 0.3, max: 45 }, level: 246, hp: 160, atk: 210, def: 210, maxHit: 22, interval: 2.4, color: '#c9d6e3', family: 'beast', defB: { stab: 60, slash: 60, crush: 60 }, boss: true, respawn: 45, epFlat: 20, epChance: 0,
     drops: [{ id: 'dragon_bones', p: 1, n: [1, 1] }, { id: 'steel_bar', p: 0.8, n: [2, 5] }, { id: 'coins', p: 1, n: [200, 600] }, { id: 'rune_legs', p: 0.02, n: [1, 1] }] },
-  iron_dragon: { name: 'Iron dragon', level: 189, hp: 165, atk: 165, def: 165, maxHit: 17, interval: 2.4, color: '#aab3bf', family: 'beast', defB: { stab: 50, slash: 50, crush: 50 }, boss: true, respawn: 40, epFlat: 12, epChance: 0,
+  iron_dragon: { name: 'Iron dragon', style: 'melee', fire: { chance: 0.3, max: 40 }, level: 189, hp: 165, atk: 165, def: 165, maxHit: 17, interval: 2.4, color: '#aab3bf', family: 'beast', defB: { stab: 50, slash: 50, crush: 50 }, boss: true, respawn: 40, epFlat: 12, epChance: 0,
     drops: [{ id: 'dragon_bones', p: 1, n: [1, 1] }, { id: 'iron_bar', p: 0.7, n: [2, 5] }, { id: 'coins', p: 1, n: [150, 400] }, { id: 'rune_axe', p: 0.015, n: [1, 1] }] },
-  bronze_dragon: { name: 'Bronze dragon', level: 131, hp: 102, atk: 112, def: 112, maxHit: 14, interval: 2.4, color: '#d08f55', family: 'beast', defB: { stab: 40, slash: 40, crush: 40 }, boss: true, respawn: 35, epFlat: 8, epChance: 0,
+  bronze_dragon: { name: 'Bronze dragon', style: 'melee', fire: { chance: 0.3, max: 35 }, level: 131, hp: 102, atk: 112, def: 112, maxHit: 14, interval: 2.4, color: '#d08f55', family: 'beast', defB: { stab: 40, slash: 40, crush: 40 }, boss: true, respawn: 35, epFlat: 8, epChance: 0,
     drops: [{ id: 'dragon_bones', p: 1, n: [1, 1] }, { id: 'bronze_bar', p: 0.6, n: [2, 5] }, { id: 'coins', p: 1, n: [100, 300] }, { id: 'rune_longsword', p: 0.02, n: [1, 1] }] },
   white_knight: { name: 'White Knight', level: 36, hp: 42, atk: 30, def: 30, maxHit: 5, interval: 1.8, color: '#f0f0f0', family: 'humanoid', defB: { stab: 15, slash: 20, crush: 10 }, epChance: 0.08,
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.7, n: [15, 40] }, { id: 'steel_sword', p: 0.04, n: [1, 1] }, { id: 'steel_helm', p: 0.03, n: [1, 1] }] },
@@ -383,7 +386,7 @@ export const MONSTERS = {
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'coins', p: 0.7, n: [8, 25] }, { id: 'iron_scimitar', p: 0.04, n: [1, 1] }] },
   seagull: { name: 'Seagull', level: 2, hp: 4, atk: 1, def: 1, maxHit: 1, interval: 1.5, color: '#e8e8e8', family: 'beast', defB: { stab: 0, slash: 0, crush: 0 }, epChance: 0.02,
     drops: [{ id: 'bones', p: 1, n: [1, 1] }, { id: 'feather', p: 0.5, n: [2, 5] }] },
-  chaos_elemental: { name: 'Chaos elemental', level: 305, hp: 250, atk: 250, def: 200, maxHit: 28, interval: 2.4, color: '#6a3a6a', family: 'beast', defB: { stab: 50, slash: 50, crush: 50 }, boss: true, respawn: 90, epFlat: 30, epChance: 0,
+  chaos_elemental: { name: 'Chaos elemental', style: 'magic', proj: 'chaos', level: 305, hp: 250, atk: 250, def: 200, maxHit: 28, interval: 2.4, color: '#6a3a6a', family: 'beast', defB: { stab: 50, slash: 50, crush: 50 }, boss: true, respawn: 90, epFlat: 30, epChance: 0,
     drops: [{ id: 'coins', p: 1, n: [500, 2000] }, { id: 'death_rune', p: 0.6, n: [10, 30] }, { id: 'chaos_rune', p: 0.5, n: [15, 40] }, { id: 'rune_body', p: 0.01, n: [1, 1] }] },
 };
 // ---- resource nodes. chance = base success per attempt at the required level (+1.2% per level above, capped 90%).
@@ -424,7 +427,7 @@ export const AREAS = {
       ['node', 'pond', 1160], ['node', 'tree', 1260], ['node', 'tree', 1360], ['station', 'fire', 1460],
       ['node', 'copper', 1560], ['node', 'tin', 1640],
       ['monster', 'chicken', 1740], ['monster', 'chicken', 1820], ['monster', 'cow', 1920], ['monster', 'cow', 2000],
-      ['monster', 'goblin', 2100], ['monster', 'goblin', 2180], ['monster', 'imp', 2260],
+      ['monster', 'goblin', 2100], ['monster', 'goblin_archer', 2180], ['monster', 'imp', 2260],
       ['sign', 'draynor', 2350], ['sign', 'falador', 60]
     ],
   },
@@ -529,6 +532,9 @@ export const AREAS = {
 };
 export const AREA_IDS = Object.keys(AREAS);
 export const START_AREA = 'lumby';
+/** monster attack style (melee unless set); protect prayers block the matching style */
+export const monsterStyle = (m) => m.style || 'melee';
+export const PROTECT = { melee: 'protect_from_melee', ranged: 'protect_from_missiles', magic: 'protect_from_magic' };
 export const BAG_SLOTS = 28;
-export const SHOP_BUY = ['hammer', 'bronze_pickaxe', 'bronze_axe', 'iron_pickaxe', 'iron_axe', 'bronze_dagger', 'bronze_scimitar', 'bronze_mace', 'small_net', 'fishing_rod', 'harpoon', 'lobster_pot', 'feather', 'shortbow', 'oak_shortbow', 'bronze_arrows', 'iron_arrows', 'air_rune', 'mind_rune', 'water_rune', 'earth_rune', 'fire_rune', 'chaos_rune', 'rune_essence'];
+export const SHOP_BUY = ['hammer', 'bronze_pickaxe', 'bronze_axe', 'iron_pickaxe', 'iron_axe', 'bronze_dagger', 'bronze_scimitar', 'bronze_mace', 'small_net', 'fishing_rod', 'harpoon', 'lobster_pot', 'feather', 'anti_dragon_shield', 'shortbow', 'oak_shortbow', 'bronze_arrows', 'iron_arrows', 'air_rune', 'mind_rune', 'water_rune', 'earth_rune', 'fire_rune', 'chaos_rune', 'rune_essence'];
 export const SELL_RATE = 0.5;

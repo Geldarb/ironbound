@@ -1,10 +1,11 @@
 // Canvas renderer + input for the side-scrolling area. The model lives in game.js; this only draws and translates taps.
 import { AREAS, MONSTERS, NODES, STATIONS, RECIPES, ITEMS } from './data.js';
+import { MON_HEIGHT } from './monsters.js';
 import { drawHero, drawMonster, drawNode, drawStation, drawSign, drawDecor, drawGround, DECOR, shade } from './art.js';
 
 export const VIEW_H = 360, GROUND = 296;
 /** approximate sprite heights (world units) for hit areas, HP bars and the target marker */
-export const MON_H = { chicken: 46, cow: 52, goblin: 62, wolf: 54, hill_giant: 112, alpha_wolf: 82 };
+export const MON_H = MON_HEIGHT;
 /** Camera tuning. ZOOM scales the whole world (1 = old close-up view; <1 shows more of the area). GROUND_FRAC = how far down the scene the walk line sits. */
 export const ZOOM = 0.7, ZOOM_MIN = 0.45, ZOOM_MAX = 1.1;
 export const GROUND_FRAC = 0.62, GROUND_FRAC_SHEET = 0.36;
@@ -12,7 +13,7 @@ const ZKEY = 'ironbound-zoom';
 export class Scene {
   constructor(canvas, game, lookIdx = 0) {
     this.cv = canvas; this.ctx = canvas.getContext('2d'); this.g = game; this.t = 0;
-    this.floaters = []; this.flash = {}; this.fx = []; this.pending = []; this.ghosts = []; this.nodeHit = {}; this.pose = null; this.k = 1; this.cam = 0; this.last = performance.now();
+    this.floaters = []; this.flash = {}; this.fx = []; this.proj = []; this.pending = []; this.ghosts = []; this.nodeHit = {}; this.pose = null; this.k = 1; this.cam = 0; this.last = performance.now();
     this.look = lookIdx;
     let z = ZOOM; try { const v = parseFloat(localStorage.getItem(ZKEY)); if (v >= ZOOM_MIN && v <= ZOOM_MAX) z = v; } catch { /* ignore */ }
     this.zoom = z;
@@ -63,10 +64,34 @@ export class Scene {
     }
     if (this.fx.length > 220) this.fx.splice(0, this.fx.length - 220);
   }
+  /** projectile from (x0,y0) to (x1,y1): arrow / spell orbs (wind/water/earth/fire/chaos) / dragonfire */
+  shoot(x0, y0, x1, y1, kind, from) { this.proj.push({ x0, y0, x1, y1, kind, t: 0, dur: kind === 'dragonfire' ? 0.45 : 0.32, from }); }
+  drawProj(ctx, dt) {
+    const COL = { wind: ['#e8f6ff', '#9ad0ff'], water: ['#bfe0ff', '#3b8eea'], earth: ['#d8c090', '#7a5a2a'], fire: ['#ffe27a', '#ff6a1e'], chaos: ['#ffb0ff', '#a02ad8'], orb: ['#e0d0ff', '#8a5ad8'] };
+    for (const p of this.proj) {
+      p.t += dt; const u = Math.min(1, p.t / p.dur), x = p.x0 + (p.x1 - p.x0) * u, arc = p.kind === 'arrow' ? -Math.sin(u * Math.PI) * 14 : 0, y = p.y0 + (p.y1 - p.y0) * u + arc;
+      if (p.kind === 'arrow') {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(Math.atan2((p.y1 - p.y0) - Math.cos(u * Math.PI) * 14 * Math.PI, p.x1 - p.x0));
+        ctx.fillStyle = '#8a5a30'; ctx.fillRect(-12, -1, 20, 2); ctx.fillStyle = '#c9d0d8'; ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(7, -3); ctx.lineTo(7, 3); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(-13, -3, 4, 2); ctx.fillRect(-13, 1, 4, 2); ctx.restore();
+      } else if (p.kind === 'dragonfire') {
+        for (let i = 0; i < 6; i++) { const v = Math.max(0, u - i * 0.06), fx = p.x0 + (p.x1 - p.x0) * v, fy = p.y0 + (p.y1 - p.y0) * v + Math.sin(this.t * 30 + i) * 3; ctx.globalAlpha = 0.85 - i * 0.1; ctx.fillStyle = i % 2 ? '#ffd34a' : '#ff5a1e'; ctx.beginPath(); ctx.arc(fx, fy, 7 + i * 1.6 + v * 6, 0, 6.28); ctx.fill(); }
+        ctx.globalAlpha = 1; if (Math.random() < 0.6) this.burst(x, y, 'smoke', 1, '#5a4a40');
+      } else {
+        const c = COL[p.kind] || COL.orb; ctx.globalAlpha = 0.35; ctx.fillStyle = c[1]; ctx.beginPath(); ctx.arc(x, y, 11, 0, 6.28); ctx.fill(); ctx.globalAlpha = 1;
+        ctx.fillStyle = c[1]; ctx.beginPath(); ctx.arc(x, y, 6, 0, 6.28); ctx.fill(); ctx.fillStyle = c[0]; ctx.beginPath(); ctx.arc(x - 1.5, y - 1.5, 3, 0, 6.28); ctx.fill();
+        if (Math.random() < 0.5) this.burst(x, y, 'spark', 1, c[0]);
+      }
+      if (u >= 1 && !p.done) { p.done = true; this.burst(p.x1, p.y1, p.kind === 'arrow' ? 'spark' : p.kind === 'dragonfire' ? 'smoke' : 'spark', p.kind === 'arrow' ? 3 : 8, p.kind === 'dragonfire' ? '#ff7a1e' : (COL[p.kind] || COL.orb)[1]); }
+    }
+    this.proj = this.proj.filter((p) => p.t < p.dur);
+  }
   later(delay, fn) { this.pending.push({ t: delay, fn }); }
   setPose(name, dur, extra = {}) { this.pose = { name, dur, t: 0, ...extra }; }
   onEvent(type, p) {
     const g = this.g, h = g.hero;
+    if (type === 'mattack' && p.proj) { const e = g.ent(p.id); this.shoot(p.x, GROUND - (MON_H[e?.kind] || 50) * (p.proj === 'dragonfire' ? 0.85 : 0.6), h.x, GROUND - 46, p.proj, -1); this.projHit = 'hero'; }
+    else if (type === 'swing' && !p.gather && (p.type === 'ranged' || p.type === 'magic')) { const t = g.targetEnt; if (t) { const sp = g.combat.spell; this.shoot(h.x + 14 * h.dir, GROUND - 52, t.x, GROUND - (MON_H[t.kind] || 50) * 0.55, p.type === 'ranged' ? 'arrow' : (sp?.id || 'wind').split('_')[0], 1); this.projHit = 'monster'; } }
+    if (type === 'hit' && this.projHit && (p.who === 'hero') === (this.projHit === 'hero')) { this.projHit = null; const q = { ...p }; this.later(0.32, () => this.onEvent('hit', q)); return; }
     if (type === 'hit') {
       const kind = p.burn ? 'burn' : p.crit ? 'crit' : p.miss ? 'miss' : 'hit';
       this.floaters.push({ x: p.x + (this.floaters.length % 3 - 1) * 8, y: GROUND - (p.who === 'hero' ? 66 : (MON_H[g.ent(p.id)?.kind] || 50) * 0.8), text: String(p.dmg), color: kind, kind: 'splat', age: 0 });
@@ -174,6 +199,7 @@ export class Scene {
     const inFight = h.state === 'attack' || h.hurt > 0 || g.data.hp < g.maxHp;
     if (inFight) this.bar(h.x, GROUND - 92, 46, g.data.hp / g.maxHp);
     if (this.tapMark && this.tapMark.t > 0 && !this.tapMark.ent) { this.tapMark.t -= dt; ctx.strokeStyle = `rgba(255,255,255,${this.tapMark.t})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(this.tapMark.x, GROUND + 6, 16 * (1.6 - this.tapMark.t), 6 * (1.6 - this.tapMark.t), 0, 0, 6.28); ctx.stroke(); }
+    this.drawProj(ctx, dt);
     // particles
     for (const q of this.fx) {
       q.age += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += (q.kind === 'smoke' ? -10 : q.kind === 'star' ? 90 : 260) * dt;

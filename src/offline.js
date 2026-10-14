@@ -40,7 +40,9 @@ export function simulateOffline(game, awaySeconds, opts = {}) {
         const dps = expectedDps(hc, m);
         if (dps <= 0) { rep.stopped = 'cannot hurt it'; break; }
         const wait = m.respawn || RESPAWN_WAIT, ttk = m.hp / dps, cycle = ttk + wait;
-        const loss = Math.max(0, (monsterHitChance(hc, m) * (m.maxHit / 2) / m.interval) * ttk - wait * REGEN_PER_SEC * (1 + hc.mods.regen)); // net hp lost per kill
+        const fc = m.fire?.chance || 0, fireAvg = m.fire ? (m.fire.max / 2) * (ITEMS[game.data.equip.shield]?.antifire ? 0.15 : 1) : 0;
+        const perHit = (1 - fc) * monsterHitChance(hc, m) * (m.maxHit / 2) + fc * fireAvg; // expected damage per monster attack (incl. dragonfire)
+        const loss = Math.max(0, (perHit / m.interval) * ttk - wait * REGEN_PER_SEC * (1 + hc.mods.regen)); // net hp lost per kill
         const floorHp = Math.ceil(maxHp * RETREAT_FRAC);
         const foods = d.autoEat.on ? d.bag.filter((s) => isFood(s.id)).sort((a, b) => ITEMS[b.id].heal - ITEMS[a.id].heal).map((s) => ({ id: s.id, n: s.n, heal: ITEMS[s.id].heal })) : [];
         const foodHeal = foods.reduce((a, f) => a + f.n * f.heal, 0);
