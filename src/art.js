@@ -24,7 +24,7 @@ function blade(ctx, c, d, base, len, w, fuller) {
 function guard(ctx, y, d, w) { rrect(ctx, -w, y, w * 2, 4.5, 2, d); rrect(ctx, -w, y, w * 2, 1.6, 1, shade(d, 1.4), null); }
 function grip(ctx, y, len) { rrect(ctx, -2.4, y + 4, 4.8, len, 2, '#7a4a28'); circle(ctx, 0, y + 5 + len, 3.2, '#d6b24a', OUT, 1.4); }
 /** where the hand holds each weapon glyph (distance below the glyph origin) */
-export const GRIP = { dagger: 15, sword: 18, longsword: 19, scimitar: 18, '2h': 27, mace: 16, warhammer: 16, axe: 10, battleaxe: 14, spear: 8, halberd: 10, pickaxe: 8, hammer: 8, net: 12, rod: 12, harpoon: 8, pot: 0, fish: 0, meat: 0 };
+export const GRIP = { dagger: 15, sword: 18, longsword: 19, scimitar: 18, '2h': 27, mace: 16, warhammer: 16, axe: 10, battleaxe: 14, spear: 8, halberd: 10, pickaxe: 8, hammer: 8, net: 12, rod: 12, harpoon: 8, pot: 0, fish: 0, meat: 0, bow: 0, staff: 4 };
 // ---- gear / tool glyphs, drawn around (0,0), pointing up, ~40 units tall. Used for icons and in the hero's hand.
 export function drawGlyph(ctx, art, c = '#aab3bf', d = '#5f6875') {
   switch (art) {
@@ -114,6 +114,8 @@ export function tabIcon(name) {
     case 'map': poly(ctx, [[-13, -9], [-5, -12], [4, -9], [13, -12], [13, 10], [4, 13], [-5, 10], [-13, 13]], '#e3d3a4', OUT, 1.6); ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-8, 4); ctx.lineTo(0, -2); ctx.lineTo(8, 5); ctx.stroke(); break;
     case 'coop': circle(ctx, -6, -5, 5, '#f2c9a0'); circle(ctx, 6, -5, 5, '#d9a273'); rrect(ctx, -12, 1, 12, 11, 4, '#3b8eea'); rrect(ctx, 0, 1, 12, 11, 4, '#e0463c'); break;
     case 'settings': ctx.beginPath(); for (let i = 0; i < 16; i++) { const a = i * Math.PI / 8, r = i % 2 ? 9 : 13; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); ctx.fillStyle = S; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = OUT; ctx.stroke(); circle(ctx, 0, 0, 4.5, '#3b342b', OUT, 1.4); break;
+    case 'prayer': poly(ctx, [[0, -14], [11, -4], [7, 12], [-7, 12], [-11, -4]], '#ffe27a', OUT, 1.6); poly(ctx, [[0, -8], [5, -2], [0, 8], [-5, -2]], '#c9a227', null); break;
+    case 'magic': ctx.save(); ctx.rotate(0.6); rrect(ctx, -2, -6, 4, 22, 2, '#8a5a30', OUT, 1.2); ctx.restore(); circle(ctx, -5, -9, 6, '#6a6ae8', OUT, 1.5); circle(ctx, -6, -10, 2.5, '#c8c8ff', null); break;
     default: circle(ctx, 0, 0, 8, G);
   }
   const url = cv.toDataURL(); tabCache.set(name, url); return url;
