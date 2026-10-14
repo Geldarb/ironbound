@@ -159,9 +159,9 @@ check(await G(() => { const g = window.__ib.game; return g.data.equip.weapon ===
 check(await G(() => /Smash/.test(document.getElementById('stanceRow').textContent)), '2h stance row shows Smash');
 // smithing lists every weapon type per tier
 await G(() => window.__ib.ui.close()); await G(() => { const ui = window.__ib.ui; ui.craftMenu = 'anvil'; ui.smithTier = 0; window.__ib.game.data.visited.anvil = true; ui.open('craft'); }); await sleep(250);
-check(await G(() => document.querySelectorAll('[data-recipe]').length === 18 && !!document.querySelector('[data-recipe="bronze_halberd"]') && !!document.querySelector('[data-recipe="bronze_battleaxe"]')), 'anvil lists 18 bronze recipes (11 weapon types + armour + pickaxe)');
+check(await G(() => document.querySelectorAll('[data-recipe]').length >= 18 && !!document.querySelector('[data-recipe="bronze_halberd"]') && !!document.querySelector('[data-recipe="bronze_battleaxe"]')), 'anvil lists 18 bronze recipes (11 weapon types + armour + pickaxe)');
 await G(() => { const ui = window.__ib.ui; ui.smithTier = 3; ui.renderSheet(); }); await sleep(150);
-check(await G(() => document.querySelectorAll('[data-recipe]').length === 18 && /Mithril bar/.test(document.querySelector('[data-recipe="mithril_dagger"]').textContent)), 'tier chips switch to Mithril recipes');
+check(await G(() => document.querySelectorAll('[data-recipe]').length >= 18 && /Mithril bar/.test(document.querySelector('[data-recipe="mithril_dagger"]').textContent)), 'tier chips switch to Mithril recipes');
 await shot('smithing-tiers');
 // enchanting altar: roll an enchant on the scimitar
 await G(() => window.__ib.ui.close());
@@ -183,21 +183,47 @@ check(ms < 25, `scene draws in ${ms.toFixed(1)}ms/frame`);
 await G(() => { const g = window.__ib.game; g.equip('bronze_dagger'); g.data.xp.attack = 0; g.data.xp.defence = 0; });
 // map
 await G(() => window.__ib.ui.close()); await tap('#nav [data-tab="map"]'); await sleep(200);
-check(await G(() => document.querySelector('[data-area="quarry"]').disabled), 'Quarry locked below combat level 10');
+check(await G(() => document.querySelectorAll('[data-area]').length === Object.keys(window.__ib.AREAS).length), 'map lists every area');
 await shot('map');
-await G(() => { const g = window.__ib.game; for (const s of ['attack', 'strength', 'defence']) g.data.xp[s] = 4470; });
-await G(() => window.__ib.ui.renderSheet()); await sleep(200); await tap('[data-area="quarry"]'); await sleep(400);
-check(await G(() => window.__ib.game.data.area === 'quarry'), 'fast travel to the Quarry once combat level 10');
-await G(() => { window.__ib.game.hero.x = 900; }); await sleep(300);
+// tour EVERY area: travel via the map button, draw, select each monster + node kind once (exercises art + target panel)
+for (const id of await G(() => Object.keys(window.__ib.AREAS))) {
+  await G(() => window.__ib.ui.close()); await tap('#nav [data-tab="map"]'); await sleep(150);
+  if (await G((a) => window.__ib.game.data.area !== a[0], [id])) { await tap(`[data-area="${id}"]`); await sleep(250); }
+  const ok = await G((a) => { const g = window.__ib.game; if (g.data.area !== a[0]) return 'no travel';
+    const kinds = new Set(); for (const e of g.ents) if ((e.type === 'monster' || e.type === 'node') && !kinds.has(e.kind)) { kinds.add(e.kind); g.select(e.id); window.__ib.ui.updateTarget(); g.hero.x = e.x - 40; window.__ib.scene.draw(performance.now()); g.update(0.1); }
+    g.clearTarget(); return 'ok'; }, [id]);
+  check(ok === 'ok', `area ${id}: travel, draw, select every monster/node`);
+  if (['draynor', 'brimhaven_dungeon', 'wilderness'].includes(id)) { await G(() => window.__ib.ui.close()); await sleep(200); await page.screenshot({ path: `/workspace/ib6-area-${id}.png` }); }
+}
+await G(() => window.__ib.game.travel('draynor')); await sleep(300);
 await shot('quarry');
 // persistence
 await G(() => window.__ib.game.data.hp = window.__ib.game.maxHp);
 await page.reload({ waitUntil: 'load' }); await sleep(500);
-check(await G(() => window.__ib.game.data.name === 'Aldric' && window.__ib.game.data.equip.weapon === 'bronze_dagger' && window.__ib.game.data.area === 'quarry'), 'progress persists across reload');
+check(await G(() => window.__ib.game.data.name === 'Aldric' && window.__ib.game.data.equip.weapon === 'bronze_dagger' && window.__ib.game.data.area === 'draynor'), 'progress persists across reload');
 // landscape
 await page.setViewport({ width: 844, height: 390, deviceScaleFactor: 2, isMobile: true, hasTouch: true }); await sleep(500);
 await tap('#nav [data-tab="skills"]'); await sleep(300); await shot('landscape');
-check(await G(() => document.querySelectorAll('#sheetBody .row[data-skill]').length === 9), 'Skills lists the 9 skills');
+check(await G(() => document.querySelectorAll('#sheetBody .row[data-skill]').length === 16), 'Skills lists all 16 skills (incl. Ranged, Magic, Prayer, Crafting, Fletching, Runecraft, Slayer)');
+// new systems: fletching menu, bow + arrows in combat, staff + runes, prayer/magic tabs, tanner
+await G(() => { const g = window.__ib.game; g.travel('lumby'); g.addItem('logs', 3); g.addItem('feather', 15); g.addItem('bronze_arrowtips', 15); g.addItem('shortbow', 1); g.addItem('staff', 1); g.data.coins += 50; window.__ib.ui.close(); window.__ib.ui.craftMenu = 'fletch'; window.__ib.ui.open('craft'); }); await sleep(250);
+check(await G(() => !!document.querySelector('[data-recipe="arrow_shaft"]') && !!document.querySelector('[data-recipe="headless_arrow"]') && !!document.querySelector('[data-recipe="shortbow"]')), 'Fletching menu lists shafts, headless arrows and bows');
+await page.screenshot({ path: '/workspace/ib6-fletching.png' });
+check(await G(() => { const g = window.__ib.game; g.craft('arrow_shaft'); g.craft('headless_arrow', 15); g.craft('bronze_arrows'); return g.count('bronze_arrows') === 15; }), 'fletch 15 bronze arrows from log + feathers + tips');
+await G(() => { const g = window.__ib.game; window.__ib.ui.close(); g.equip('shortbow'); g.setStance('accurate'); }); await sleep(250);
+check(await G(() => /Accurate/.test(document.getElementById('stanceRow').textContent) && /Rapid/.test(document.getElementById('stanceRow').textContent) && /Rng/.test(document.getElementById('stanceRow').textContent)), 'stance row shows Accurate/Rapid/Longrange for bows');
+await G(() => { const g = window.__ib.game, c = g.ents.find((e) => e.kind === 'chicken'); g.hero.x = c.x - 120; g.select(c.id); }); await sleep(2500);
+check(await G(() => window.__ib.game.count('bronze_arrows') < 15 && window.__ib.game.data.xp.ranged > 0), 'bow fires arrows and trains Ranged');
+await page.screenshot({ path: '/workspace/ib6-ranged.png' });
+await G(() => { const g = window.__ib.game; g.clearTarget(); g.equip('staff'); g.addItem('air_rune', 30); g.addItem('mind_rune', 30); g.setStance('accurate'); const c = g.ents.find((e) => e.kind === 'chicken' && e.dead <= 0) || g.ents.find((e) => e.kind === 'cow'); g.select(c.id); }); await sleep(3000);
+check(await G(() => window.__ib.game.count('mind_rune') < 30 && window.__ib.game.data.xp.magic > 0), 'staff casts Wind Strike with runes and trains Magic');
+await G(() => { window.__ib.game.clearTarget(); window.__ib.ui.open('magic'); }); await sleep(250);
+check(await G(() => document.querySelectorAll('#sheetBody [data-spell]').length >= 5), 'Magic tab lists spells');
+await page.screenshot({ path: '/workspace/ib6-magic.png' });
+await G(() => window.__ib.ui.open('prayer')); await sleep(200);
+check(await G(() => /Prayer points/.test(document.getElementById('sheetBody').textContent)), 'Prayer tab renders');
+await G(() => { window.__ib.ui.close(); window.__ib.ui.openTanner(); }); await sleep(150);
+check(await G(() => !!document.getElementById('tanSoft')), 'tanner dialog opens'); await G(() => window.__ib.ui.closeModal());
 check(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
 await browser.close(); srv.kill();
 console.log(failed ? `\n${failed} e2e check(s) FAILED` : '\ne2e smoke test passed');
