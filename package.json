@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "node test/unit.mjs && node test/coop.mjs",
-    "test:e2e": "node test/e2e.mjs && node test/e2e-coop.mjs && node test/e2e-ib9.mjs"
+    "test:e2e": "node test/e2e.mjs && node test/e2e-coop.mjs && node test/e2e-ib9.mjs && node test/e2e-ib10.mjs"
   },
   "engines": {
     "node": ">=18"

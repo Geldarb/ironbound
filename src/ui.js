@@ -127,6 +127,7 @@ export class UI {
   }
 
   renderSheet(keepScroll = false) {
+    if (!this.sheet || typeof this['r_' + this.sheet] !== 'function') return; // e.g. a teleport closed the sheet mid-click
     const body = $('sheetBody'), top = body.scrollTop, g = this.g;
     const t = { gear: 'Equipment', skills: 'Skills', prayer: 'Prayer', magic: 'Magic', bag: this.mode.bank ? 'Bank' : this.mode.shop ? 'General store' : 'Bag', craft: 'Crafting', map: 'World map', settings: 'Settings', altar: 'Enchanting altar' }[this.sheet];
     $('sheetTitle').textContent = t;
